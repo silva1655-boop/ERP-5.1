@@ -4,7 +4,7 @@ import {
   Users, FileText, Bell, LogOut, ChevronRight, Plus, X,
   Calendar, Zap, Shield, Search, ClipboardList, AlertCircle,
   Check, RefreshCw, Activity, ArrowRight, Edit2, Trash2,
-  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge
+  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge, Key, FileWarning
 } from "lucide-react";
 import { db } from "./firebase.js";
 import { doc, setDoc, onSnapshot, getDoc } from "firebase/firestore";
@@ -46,6 +46,7 @@ const SEED_EQUIPMENT = [
 const SEED_PM_PLANS    = [];
 const SEED_REQUESTS    = [];
 const SEED_WORK_ORDERS = [];
+const SEED_DEVIATIONS  = [];
 
 // ─── COLECCIÓN NUEVA (fuerza reinicio de datos en Firebase) ──────────────────
 const COLL = "mantek_v2";
@@ -83,6 +84,7 @@ const ST = {
   cancelada:     {label:"Cancelada",     cls:"text-red-700     bg-red-50      border-red-200"    },
   aprobada:      {label:"Aprobada",      cls:"text-emerald-700 bg-emerald-50  border-emerald-200"},
   rechazada:     {label:"Rechazada",     cls:"text-red-700     bg-red-50      border-red-200"    },
+  revisado:      {label:"Revisado",      cls:"text-blue-700    bg-blue-50     border-blue-200"   },
   operativo:     {label:"Operativo",     cls:"text-emerald-700 bg-emerald-50  border-emerald-200"},
   mantenimiento: {label:"Mantenimiento", cls:"text-amber-700   bg-amber-50    border-amber-200"  },
   falla:         {label:"Falla",         cls:"text-red-700     bg-red-50      border-red-200"    },
@@ -93,8 +95,8 @@ const PRI_CLS ={alta:"text-red-700 bg-red-50 border-red-200",media:"text-amber-7
 const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100 border-gray-300"};return<span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${c.cls}`}>{label||c.label}</span>;};
 
 const ROLE_CFG={
-  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","reports","users"]},
-  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","reports"]},
+  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
+  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
   operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
 };
 
@@ -126,6 +128,28 @@ function ModalActions({onSave,onCancel,label="Guardar"}){
   );
 }
 
+// ─── CHANGE PASSWORD MODAL ───────────────────────────────────────────────────
+function ChangePasswordModal({user,onSave,onClose}){
+  const [oldPwd,setOldPwd]=useState(""); const [newPwd,setNewPwd]=useState(""); const [conf,setConf]=useState(""); const [err,setErr]=useState("");
+  const handle=()=>{
+    if(!oldPwd||!newPwd||!conf){setErr("Completa todos los campos");return;}
+    if(newPwd!==conf){setErr("Las contraseñas nuevas no coinciden");return;}
+    if(newPwd.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
+    const e=onSave(oldPwd,newPwd); if(e)setErr(e);
+  };
+  return(
+    <Modal title="Cambiar Contraseña" onClose={onClose}>
+      {err&&<div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-lg mb-4">{err}</div>}
+      <div className="space-y-3">
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">CONTRASEÑA ACTUAL</label><input type="password" value={oldPwd} onChange={e=>setOldPwd(e.target.value)} className={iCls}/></div>
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">NUEVA CONTRASEÑA</label><input type="password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} className={iCls}/></div>
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">CONFIRMAR NUEVA CONTRASEÑA</label><input type="password" value={conf} onChange={e=>setConf(e.target.value)} className={iCls}/></div>
+      </div>
+      <ModalActions onSave={handle} onCancel={onClose} label="Cambiar Contraseña"/>
+    </Modal>
+  );
+}
+
 // ─── STAT CARD ───────────────────────────────────────────────────────────────
 function StatCard({icon:Icon,label,value,sub,color="navy"}){
   const m={
@@ -151,7 +175,7 @@ function StatCard({icon:Icon,label,value,sub,color="navy"}){
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
 function LoginPage({users,onLogin}){
   const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [err,setErr]=useState(""); const [show,setShow]=useState(false);
-  const handle=()=>{const u=users.find(x=>x.email===email&&x.password===pass);if(u)onLogin(u);else setErr("Credenciales incorrectas");};
+  const handle=()=>{const u=users.find(x=>x.email.toLowerCase()===email.trim().toLowerCase()&&x.password===pass);if(u)onLogin(u);else setErr("Credenciales incorrectas");};
   return(
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
       style={{background:`linear-gradient(160deg, ${NV.navy} 0%, ${NV.navyMid} 40%, ${NV.blue} 70%, ${NV.cyan} 100%)`}}>
@@ -227,10 +251,11 @@ const NAV_ITEMS={
   indicadores:   {label:"Indicadores KPI",    icon:TrendingUp},
   requests:      {label:"Solicitudes",        icon:Bell},
   notifications: {label:"Notificaciones",     icon:Bell},
+  deviaciones:   {label:"Rep. Inspección",    icon:FileWarning},
   reports:       {label:"Informes",           icon:FileText},
   users:         {label:"Usuarios",           icon:Users},
 };
-function Sidebar({user,active,onNav,onLogout,notifications,online}){
+function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devBadge,online}){
   const cfg=ROLE_CFG[user.role]; const RoleIcon=cfg.icon;
   return(
     <div className="w-56 flex flex-col h-screen sticky top-0 flex-shrink-0 shadow-xl" style={{background:NV.navy}}>
@@ -255,13 +280,13 @@ function Sidebar({user,active,onNav,onLogout,notifications,online}){
         {cfg.nav.map(key=>{
           const item=NAV_ITEMS[key]; if(!item) return null;
           const Icon=item.icon; const isActive=active===key;
-          const badge=(key==="requests"||key==="notifications")&&notifications>0;
+          const badge=((key==="requests"||key==="notifications")&&notifications>0)||(key==="deviaciones"&&devBadge>0);
           return(
             <button key={key} onClick={()=>onNav(key)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${isActive?"text-white font-semibold":"text-blue-200 hover:text-white hover:bg-white/10"}`}
               style={isActive?{background:`${NV.blue}cc`}:{}}>
               <Icon size={15}/><span className="flex-1 text-left">{item.label}</span>
-              {badge&&<span className="bg-amber-400 text-black text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{notifications}</span>}
+              {badge&&<span className="bg-amber-400 text-black text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{key==="deviaciones"?devBadge:notifications}</span>}
             </button>
           );
         })}
@@ -275,6 +300,9 @@ function Sidebar({user,active,onNav,onLogout,notifications,online}){
             <p className={`text-xs ${cfg.color} flex items-center gap-1`}><RoleIcon size={10}/>{cfg.label}</p>
           </div>
         </div>
+        <button onClick={onChangePassword} className="w-full flex items-center gap-2 px-3 py-2 text-blue-300 hover:text-white text-sm rounded-lg hover:bg-white/10 transition-all">
+          <Key size={14}/><span>Cambiar Contraseña</span>
+        </button>
         <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-blue-300 hover:text-red-400 text-sm rounded-lg hover:bg-red-400/10 transition-all">
           <LogOut size={14}/><span>Cerrar Sesión</span>
         </button>
@@ -393,7 +421,7 @@ function Dashboard({user,data,onNav}){
 
 // ─── WORK ORDERS ─────────────────────────────────────────────────────────────
 function WorkOrders({user,data,setData}){
-  const {wos,equip,users}=data;
+  const {wos,equip,users,requests}=data;
   const [filter,setFilter]=useState("all"); const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null); const [showRep,setShowRep]=useState(false);
   const [rep,setRep]=useState({actualHours:"",observations:"",status:"completada"});
@@ -405,7 +433,15 @@ function WorkOrders({user,data,setData}){
     return true;
   });
   const updWO=(id,patch)=>{const u=wos.map(w=>w.id===id?{...w,...patch}:w);setData(d=>({...d,wos:u}));saveData("workOrders",u);if(sel?.id===id)setSel(s=>({...s,...patch}));};
-  const submitRep=()=>{if(!rep.actualHours)return;updWO(sel.id,{status:rep.status,actualHours:parseFloat(rep.actualHours),observations:rep.observations});setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});};
+  const submitRep=()=>{
+    if(!rep.actualHours)return;
+    updWO(sel.id,{status:rep.status,actualHours:parseFloat(rep.actualHours),observations:rep.observations});
+    if(rep.status==="completada"&&sel.reqId){
+      const updR=requests.map(r=>r.id===sel.reqId?{...r,status:"completada"}:r);
+      setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});
+  };
   const cur=sel?wos.find(w=>w.id===sel.id):null;
   const curEq=cur?equip.find(e=>e.id===cur.equipId):null;
   const curAs=cur?users.find(u=>u.id===cur.assignedTo):null;
@@ -467,7 +503,7 @@ function WorkOrders({user,data,setData}){
             <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[cur.priority]}`}>{cur.priority.toUpperCase()}</span>
           </div>
           <div className="space-y-2 mb-4 text-xs">
-            {[["Equipo",curEq?.name||"—"],["Código",curEq?.code||"—"],["Tipo",cur.type],["Fuente",cur.source==="plan"?"Plan Preventivo":"Solicitud"],["Programado",fmt(cur.scheduledDate)],["Horas Est.",`${cur.estimatedHours}h`],["Asignado a",curAs?.name||"—"]].map(([k,v])=>(
+            {[["Equipo",curEq?.name||"—"],["Código",curEq?.code||"—"],["Tipo",cur.type],["Fuente",cur.source==="plan"?"Plan Preventivo":cur.source==="inspeccion"?"Inspección":"Solicitud"],["Programado",fmt(cur.scheduledDate)],["Horas Est.",`${cur.estimatedHours}h`],["Asignado a",curAs?.name||"—"]].map(([k,v])=>(
               <div key={k} className="flex justify-between gap-2"><span className="text-gray-400">{k}</span><span className="text-gray-700 text-right">{v}</span></div>
             ))}
             {cur.actualHours&&<div className="flex justify-between"><span className="text-gray-400">Horas Reales</span><span className="text-emerald-600 font-semibold">{cur.actualHours}h</span></div>}
@@ -480,7 +516,14 @@ function WorkOrders({user,data,setData}){
               <button onClick={()=>setShowRep(true)} className="w-full text-white text-sm py-2 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}>Reportar Trabajo</button>
             </>}
             {role==="supervisor"&&cur.status!=="completada"&&cur.status!=="cancelada"&&(
-              <select value={cur.status} onChange={e=>updWO(cur.id,{status:e.target.value})} className={sCls}>
+              <select value={cur.status} onChange={e=>{
+                const s=e.target.value;
+                updWO(cur.id,{status:s});
+                if(s==="completada"&&cur.reqId){
+                  const updR=requests.map(r=>r.id===cur.reqId?{...r,status:"completada"}:r);
+                  setData(d=>({...d,requests:updR}));saveData("requests",updR);
+                }
+              }} className={sCls}>
                 <option value="pendiente">Pendiente</option><option value="asignada">Asignada</option>
                 <option value="en_proceso">En Proceso</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option>
               </select>
@@ -847,10 +890,11 @@ function Requests({user,data,setData}){
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media"});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
-  const visible=user.role==="supervisor"?requests:requests.filter(r=>r.requestedBy===user.id);
-  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
-  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`Reparación ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
+  const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
+  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
+  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
+  const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
@@ -860,22 +904,36 @@ function Requests({user,data,setData}){
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
       <div className="space-y-3">
         {visible.map(r=>{const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);return(
-          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?"border-blue-300":"border-gray-200"}`}>
+          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300 bg-emerald-50/30":"border-gray-200"}`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Badge s={r.status}/><span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
+                  {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
                 <p className="text-gray-800 font-semibold text-sm mb-1">{r.title}</p>
                 <p className="text-gray-500 text-xs mb-2">{r.description}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap"><span>{eq?.name||"—"}</span><span>·</span><span>{reqBy?.name||"—"}</span><span>·</span><span>{fmtDT(r.requestedAt)}</span></div>
-                {linkedOT&&<div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-1 rounded-full font-medium"><CheckCircle size={10}/>OT: {linkedOT.code}</div>}
+                {linkedOT&&(
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
+                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
+                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
+                    </div>
+                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                  </div>
+                )}
               </div>
               {user.role==="supervisor"&&r.status==="pendiente"&&(
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-col">
                   <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
-                  <button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                  {r.source==="inspeccion"
+                    ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                    :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                  }
                 </div>
               )}
             </div>
@@ -980,6 +1038,104 @@ function UsersPage({data,setData}){
   );
 }
 
+// ─── DEVIATION REPORTS ───────────────────────────────────────────────────────
+function DeviationReports({user,data,setData}){
+  const {requests:allReqs,equip,users,wos}=data;
+  const deviations=allReqs.filter(r=>r.source==="inspeccion");
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  const role=user.role;
+  const visible=role==="supervisor"?deviations:deviations.filter(d=>d.requestedBy===user.id);
+
+  const createDev=()=>{
+    if(!form.equipId||!form.title)return;
+    const nd={id:uid(),...form,status:"pendiente",source:"inspeccion",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};
+    const updated=[...allReqs,nd];
+    setData(d=>({...d,requests:updated}));saveData("requests",updated);
+    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  };
+
+  const DEV_TYPE_LABEL={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía",desgaste:"Desgaste",otro:"Otro"};
+
+  return(
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-gray-900 font-bold text-xl">Mis Reportes de Inspección</h1>
+          <p className="text-gray-500 text-sm">{visible.length} reportes · {visible.filter(d=>d.status==="pendiente").length} pendientes</p>
+        </div>
+        {role==="mecanico"&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nuevo Reporte</button>}
+      </div>
+      {visible.length===0&&<div className="text-center py-16 text-gray-400"><FileWarning size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin reportes de inspección</p></div>}
+      <div className="space-y-3">
+        {visible.map(d=>{
+          const eq=equip.find(e=>e.id===d.equipId);const repBy=users.find(u=>u.id===d.requestedBy);const linkedOT=wos.find(w=>w.id===d.otId);
+          return(
+            <div key={d.id} className={`bg-white border rounded-xl p-5 shadow-sm ${d.status==="pendiente"?"border-amber-300":"border-gray-200"}`}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <Badge s={d.status}/>
+                  <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[d.priority]}`}>{d.priority.toUpperCase()}</span>
+                  <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
+                </div>
+                <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
+                <p className="text-gray-500 text-xs mb-2">{d.description}</p>
+                <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                  <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.requestedAt)}</span>
+                </div>
+                {linkedOT&&(
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
+                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
+                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
+                    </div>
+                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {showForm&&(
+        <Modal title="Nuevo Reporte de Inspección" onClose={()=>setShowForm(false)}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+              <select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TIPO DE DESVIACIÓN</label>
+              <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} className={sCls}>
+                <option value="fuera_de_programa">Fuera de Programa</option>
+                <option value="anomalia">Anomalía Detectada</option>
+                <option value="desgaste">Desgaste / Deterioro</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÍTULO / HALLAZGO *</label>
+              <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve del hallazgo"/>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DETALLADA</label>
+              <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Describe la desviación encontrada..."/>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label>
+              <select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} className={sCls}>
+                <option value="alta">Alta — Requiere atención inmediata</option>
+                <option value="media">Media — Afecta rendimiento</option>
+                <option value="baja">Baja — Sin impacto inmediato</option>
+              </select>
+            </div>
+          </div>
+          <ModalActions onSave={createDev} onCancel={()=>setShowForm(false)} label="Enviar Reporte"/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
 function Notifications({user,data}){
   const {wos,equip,requests}=data;
@@ -1007,7 +1163,7 @@ function Notifications({user,data}){
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
-  const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);
+  const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
   const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS});
   const unsubs=useRef([]);
 
@@ -1037,6 +1193,15 @@ export default function App(){
   );
 
   const pendingReqs=data.requests.filter(r=>r.status==="pendiente").length;
+  const devBadge=user?.role==="supervisor"?data.requests.filter(r=>r.source==="inspeccion"&&r.status==="pendiente").length:0;
+
+  const handleChangePwd=(oldPwd,newPwd)=>{
+    if(user.password!==oldPwd)return "La contraseña actual es incorrecta";
+    const updated=data.users.map(u=>u.id===user.id?{...u,password:newPwd}:u);
+    setData(d=>({...d,users:updated}));saveData("users",updated);
+    setUser(u=>({...u,password:newPwd}));setShowChangePwd(false);return null;
+  };
+
   if(!user) return <LoginPage users={data.users} onLogin={u=>{setUser(u);setPage("dashboard");}}/>;
 
   const PAGES={
@@ -1048,13 +1213,15 @@ export default function App(){
     requests:      <Requests      user={user} data={data} setData={setData}/>,
     notifications: <Notifications user={user} data={data}/>,
     reports:       <Reports       data={data}/>,
+    deviaciones:   <DeviationReports user={user} data={data} setData={setData}/>,
     users:         <UsersPage     data={data} setData={setData}/>,
   };
 
   return(
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar user={user} active={page} onNav={setPage} onLogout={()=>{setUser(null);setPage("dashboard");}} notifications={pendingReqs} online={online}/>
+      <Sidebar user={user} active={page} onNav={setPage} onLogout={()=>{setUser(null);setPage("dashboard");}} onChangePassword={()=>setShowChangePwd(true)} notifications={pendingReqs} devBadge={devBadge} online={online}/>
       <main className="flex-1 min-h-screen overflow-y-auto">{PAGES[page]||PAGES.dashboard}</main>
+      {showChangePwd&&<ChangePasswordModal user={user} onSave={handleChangePwd} onClose={()=>setShowChangePwd(false)}/>}
     </div>
   );
 }
