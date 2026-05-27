@@ -4,7 +4,7 @@ import {
   Users, FileText, Bell, LogOut, ChevronRight, Plus, X,
   Calendar, Zap, Shield, Search, ClipboardList, AlertCircle,
   Check, RefreshCw, Activity, ArrowRight, Edit2, Trash2,
-  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge
+  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge, Key, FileWarning
 } from "lucide-react";
 import { db } from "./firebase.js";
 import { doc, setDoc, onSnapshot, getDoc } from "firebase/firestore";
@@ -46,6 +46,7 @@ const SEED_EQUIPMENT = [
 const SEED_PM_PLANS    = [];
 const SEED_REQUESTS    = [];
 const SEED_WORK_ORDERS = [];
+const SEED_DEVIATIONS  = [];
 
 // ─── COLECCIÓN NUEVA (fuerza reinicio de datos en Firebase) ──────────────────
 const COLL = "mantek_v2";
@@ -93,8 +94,8 @@ const PRI_CLS ={alta:"text-red-700 bg-red-50 border-red-200",media:"text-amber-7
 const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100 border-gray-300"};return<span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${c.cls}`}>{label||c.label}</span>;};
 
 const ROLE_CFG={
-  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","reports","users"]},
-  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","reports"]},
+  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
+  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
   operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
 };
 
@@ -126,6 +127,28 @@ function ModalActions({onSave,onCancel,label="Guardar"}){
   );
 }
 
+// ─── CHANGE PASSWORD MODAL ───────────────────────────────────────────────────
+function ChangePasswordModal({user,onSave,onClose}){
+  const [oldPwd,setOldPwd]=useState(""); const [newPwd,setNewPwd]=useState(""); const [conf,setConf]=useState(""); const [err,setErr]=useState("");
+  const handle=()=>{
+    if(!oldPwd||!newPwd||!conf){setErr("Completa todos los campos");return;}
+    if(newPwd!==conf){setErr("Las contraseñas nuevas no coinciden");return;}
+    if(newPwd.length<6){setErr("La contraseña debe tener al menos 6 caracteres");return;}
+    const e=onSave(oldPwd,newPwd); if(e)setErr(e);
+  };
+  return(
+    <Modal title="Cambiar Contraseña" onClose={onClose}>
+      {err&&<div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-lg mb-4">{err}</div>}
+      <div className="space-y-3">
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">CONTRASEÑA ACTUAL</label><input type="password" value={oldPwd} onChange={e=>setOldPwd(e.target.value)} className={iCls}/></div>
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">NUEVA CONTRASEÑA</label><input type="password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} className={iCls}/></div>
+        <div><label className="text-gray-500 text-xs font-medium mb-1 block">CONFIRMAR NUEVA CONTRASEÑA</label><input type="password" value={conf} onChange={e=>setConf(e.target.value)} className={iCls}/></div>
+      </div>
+      <ModalActions onSave={handle} onCancel={onClose} label="Cambiar Contraseña"/>
+    </Modal>
+  );
+}
+
 // ─── STAT CARD ───────────────────────────────────────────────────────────────
 function StatCard({icon:Icon,label,value,sub,color="navy"}){
   const m={
@@ -151,7 +174,7 @@ function StatCard({icon:Icon,label,value,sub,color="navy"}){
 // ─── LOGIN ───────────────────────────────────────────────────────────────────
 function LoginPage({users,onLogin}){
   const [email,setEmail]=useState(""); const [pass,setPass]=useState(""); const [err,setErr]=useState(""); const [show,setShow]=useState(false);
-  const handle=()=>{const u=users.find(x=>x.email===email&&x.password===pass);if(u)onLogin(u);else setErr("Credenciales incorrectas");};
+  const handle=()=>{const u=users.find(x=>x.email.toLowerCase()===email.trim().toLowerCase()&&x.password===pass);if(u)onLogin(u);else setErr("Credenciales incorrectas");};
   return(
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
       style={{background:`linear-gradient(160deg, ${NV.navy} 0%, ${NV.navyMid} 40%, ${NV.blue} 70%, ${NV.cyan} 100%)`}}>
@@ -227,10 +250,11 @@ const NAV_ITEMS={
   indicadores:   {label:"Indicadores KPI",    icon:TrendingUp},
   requests:      {label:"Solicitudes",        icon:Bell},
   notifications: {label:"Notificaciones",     icon:Bell},
+  deviaciones:   {label:"Rep. Inspección",    icon:FileWarning},
   reports:       {label:"Informes",           icon:FileText},
   users:         {label:"Usuarios",           icon:Users},
 };
-function Sidebar({user,active,onNav,onLogout,notifications,online}){
+function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devBadge,online}){
   const cfg=ROLE_CFG[user.role]; const RoleIcon=cfg.icon;
   return(
     <div className="w-56 flex flex-col h-screen sticky top-0 flex-shrink-0 shadow-xl" style={{background:NV.navy}}>
@@ -255,13 +279,13 @@ function Sidebar({user,active,onNav,onLogout,notifications,online}){
         {cfg.nav.map(key=>{
           const item=NAV_ITEMS[key]; if(!item) return null;
           const Icon=item.icon; const isActive=active===key;
-          const badge=(key==="requests"||key==="notifications")&&notifications>0;
+          const badge=((key==="requests"||key==="notifications")&&notifications>0)||(key==="deviaciones"&&devBadge>0);
           return(
             <button key={key} onClick={()=>onNav(key)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${isActive?"text-white font-semibold":"text-blue-200 hover:text-white hover:bg-white/10"}`}
               style={isActive?{background:`${NV.blue}cc`}:{}}>
               <Icon size={15}/><span className="flex-1 text-left">{item.label}</span>
-              {badge&&<span className="bg-amber-400 text-black text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{notifications}</span>}
+              {badge&&<span className="bg-amber-400 text-black text-xs font-bold w-4 h-4 rounded-full flex items-center justify-center">{key==="deviaciones"?devBadge:notifications}</span>}
             </button>
           );
         })}
@@ -275,6 +299,9 @@ function Sidebar({user,active,onNav,onLogout,notifications,online}){
             <p className={`text-xs ${cfg.color} flex items-center gap-1`}><RoleIcon size={10}/>{cfg.label}</p>
           </div>
         </div>
+        <button onClick={onChangePassword} className="w-full flex items-center gap-2 px-3 py-2 text-blue-300 hover:text-white text-sm rounded-lg hover:bg-white/10 transition-all">
+          <Key size={14}/><span>Cambiar Contraseña</span>
+        </button>
         <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-blue-300 hover:text-red-400 text-sm rounded-lg hover:bg-red-400/10 transition-all">
           <LogOut size={14}/><span>Cerrar Sesión</span>
         </button>
@@ -980,6 +1007,128 @@ function UsersPage({data,setData}){
   );
 }
 
+// ─── DEVIATION REPORTS ───────────────────────────────────────────────────────
+function DeviationReports({user,data,setData}){
+  const {deviations,equip,users,wos}=data;
+  const [showForm,setShowForm]=useState(false);
+  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  const role=user.role;
+  const visible=role==="supervisor"?deviations:deviations.filter(d=>d.reportedBy===user.id);
+
+  const createDev=()=>{
+    if(!form.equipId||!form.title)return;
+    const nd={id:uid(),...form,status:"pendiente",reportedBy:user.id,reportedAt:new Date().toISOString(),reviewedBy:null,otId:null};
+    const updated=[...deviations,nd];
+    setData(d=>({...d,deviations:updated}));saveData("deviations",updated);
+    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  };
+
+  const createOT=dev=>{
+    const eq=equip.find(e=>e.id===dev.equipId);
+    const priority=dev.priority==="alta"||eq?.criticality==="A"?"alta":dev.priority;
+    const mec=users.find(u=>u.role==="mecanico");
+    const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:dev.equipId,planId:null,
+      title:`Inspección ${eq?.name||""} - ${dev.title}`,priority,status:"pendiente",assignedTo:mec?.id||"",
+      createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),
+      estimatedHours:priority==="alta"?4:2,actualHours:null,description:dev.description,
+      observations:"",parts:[],source:"inspeccion",reqId:dev.id};
+    const updW=[...wos,newOT];
+    const updD=deviations.map(d=>d.id===dev.id?{...d,status:"ot_creada",reviewedBy:user.id,otId:newOT.id}:d);
+    setData(d=>({...d,wos:updW,deviations:updD}));
+    saveData("workOrders",updW);saveData("deviations",updD);
+    alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);
+  };
+
+  const markReviewed=dev=>{
+    const updated=deviations.map(d=>d.id===dev.id?{...d,status:"revisado",reviewedBy:user.id}:d);
+    setData(d=>({...d,deviations:updated}));saveData("deviations",updated);
+  };
+
+  const DEV_TYPE_LABEL={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía",desgaste:"Desgaste",otro:"Otro"};
+  const DEV_ST={
+    pendiente:{label:"Pendiente",cls:"text-amber-700 bg-amber-50 border-amber-200"},
+    revisado: {label:"Revisado", cls:"text-blue-700 bg-blue-50 border-blue-200"},
+    ot_creada:{label:"OT Creada",cls:"text-emerald-700 bg-emerald-50 border-emerald-200"},
+  };
+
+  return(
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-gray-900 font-bold text-xl">Reportes de Inspección</h1>
+          <p className="text-gray-500 text-sm">{visible.length} reportes · {visible.filter(d=>d.status==="pendiente").length} pendientes</p>
+        </div>
+        {role==="mecanico"&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nuevo Reporte</button>}
+      </div>
+      {visible.length===0&&<div className="text-center py-16 text-gray-400"><FileWarning size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin reportes de inspección</p></div>}
+      <div className="space-y-3">
+        {visible.map(d=>{
+          const eq=equip.find(e=>e.id===d.equipId);const repBy=users.find(u=>u.id===d.reportedBy);const linkedOT=wos.find(w=>w.id===d.otId);
+          const st=DEV_ST[d.status]||DEV_ST.pendiente;
+          return(
+            <div key={d.id} className={`bg-white border rounded-xl p-5 shadow-sm ${d.status==="pendiente"?"border-amber-300":"border-gray-200"}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${st.cls}`}>{st.label}</span>
+                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[d.priority]}`}>{d.priority.toUpperCase()}</span>
+                    <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
+                  </div>
+                  <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
+                  <p className="text-gray-500 text-xs mb-2">{d.description}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                    <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.reportedAt)}</span>
+                  </div>
+                  {linkedOT&&<div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-1 rounded-full font-medium"><CheckCircle size={10}/>OT: {linkedOT.code}</div>}
+                </div>
+                {role==="supervisor"&&d.status==="pendiente"&&(
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={()=>createOT(d)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Plus size={12}/>Crear OT</button>
+                    <button onClick={()=>markReviewed(d)} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-100 transition font-medium"><Check size={12}/>Revisar</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {showForm&&(
+        <Modal title="Nuevo Reporte de Inspección" onClose={()=>setShowForm(false)}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+              <select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TIPO DE DESVIACIÓN</label>
+              <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} className={sCls}>
+                <option value="fuera_de_programa">Fuera de Programa</option>
+                <option value="anomalia">Anomalía Detectada</option>
+                <option value="desgaste">Desgaste / Deterioro</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÍTULO / HALLAZGO *</label>
+              <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve del hallazgo"/>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DETALLADA</label>
+              <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Describe la desviación encontrada..."/>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label>
+              <select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} className={sCls}>
+                <option value="alta">Alta — Requiere atención inmediata</option>
+                <option value="media">Media — Afecta rendimiento</option>
+                <option value="baja">Baja — Sin impacto inmediato</option>
+              </select>
+            </div>
+          </div>
+          <ModalActions onSave={createDev} onCancel={()=>setShowForm(false)} label="Enviar Reporte"/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
 function Notifications({user,data}){
   const {wos,equip,requests}=data;
@@ -1007,14 +1156,14 @@ function Notifications({user,data}){
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
-  const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);
-  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS});
+  const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
+  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,deviations:SEED_DEVIATIONS});
   const unsubs=useRef([]);
 
   useEffect(()=>{
-    const keys=["users","equipment","plans","requests","workOrders"];
-    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS};
-    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos"};
+    const keys=["users","equipment","plans","requests","workOrders","deviations"];
+    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,deviations:SEED_DEVIATIONS};
+    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",deviations:"deviations"};
     (async()=>{
       for(const k of keys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
@@ -1037,6 +1186,15 @@ export default function App(){
   );
 
   const pendingReqs=data.requests.filter(r=>r.status==="pendiente").length;
+  const devBadge=user?.role==="supervisor"?(data.deviations||[]).filter(d=>d.status==="pendiente").length:0;
+
+  const handleChangePwd=(oldPwd,newPwd)=>{
+    if(user.password!==oldPwd)return "La contraseña actual es incorrecta";
+    const updated=data.users.map(u=>u.id===user.id?{...u,password:newPwd}:u);
+    setData(d=>({...d,users:updated}));saveData("users",updated);
+    setUser(u=>({...u,password:newPwd}));setShowChangePwd(false);return null;
+  };
+
   if(!user) return <LoginPage users={data.users} onLogin={u=>{setUser(u);setPage("dashboard");}}/>;
 
   const PAGES={
@@ -1048,13 +1206,15 @@ export default function App(){
     requests:      <Requests      user={user} data={data} setData={setData}/>,
     notifications: <Notifications user={user} data={data}/>,
     reports:       <Reports       data={data}/>,
+    deviaciones:   <DeviationReports user={user} data={data} setData={setData}/>,
     users:         <UsersPage     data={data} setData={setData}/>,
   };
 
   return(
     <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar user={user} active={page} onNav={setPage} onLogout={()=>{setUser(null);setPage("dashboard");}} notifications={pendingReqs} online={online}/>
+      <Sidebar user={user} active={page} onNav={setPage} onLogout={()=>{setUser(null);setPage("dashboard");}} onChangePassword={()=>setShowChangePwd(true)} notifications={pendingReqs} devBadge={devBadge} online={online}/>
       <main className="flex-1 min-h-screen overflow-y-auto">{PAGES[page]||PAGES.dashboard}</main>
+      {showChangePwd&&<ChangePasswordModal user={user} onSave={handleChangePwd} onClose={()=>setShowChangePwd(false)}/>}
     </div>
   );
 }
