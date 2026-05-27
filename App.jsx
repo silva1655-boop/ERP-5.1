@@ -888,10 +888,10 @@ function Indicadores({data}){
 function Requests({user,data,setData}){
   const {requests,equip,users,wos}=data;
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media"});
+  const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
   const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
-  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
+  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});};
   const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
@@ -913,6 +913,7 @@ function Requests({user,data,setData}){
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
                 <p className="text-gray-800 font-semibold text-sm mb-1">{r.title}</p>
+                {(r.subsistema||r.componente)&&<div className="flex items-center gap-3 mb-1 text-xs"><span className="text-gray-400">Subsistema:</span><span className="font-medium text-gray-700">{({electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"})[r.subsistema]||r.subsistema||"—"}</span>{r.componente&&<><span className="text-gray-300">|</span><span className="text-gray-400">Componente:</span><span className="font-medium text-gray-700">{r.componente}</span></>}</div>}
                 <p className="text-gray-500 text-xs mb-2">{r.description}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap"><span>{eq?.name||"—"}</span><span>·</span><span>{reqBy?.name||"—"}</span><span>·</span><span>{fmtDT(r.requestedAt)}</span></div>
                 {linkedOT&&(
@@ -944,8 +945,18 @@ function Requests({user,data,setData}){
         <Modal title="Nueva Solicitud de Reparación" onClose={()=>setShowForm(false)}>
           <div className="space-y-3">
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label><select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">FALLA DETECTADA</label><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls}/></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN</label><textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"}/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">SUBSISTEMA</label>
+              <select value={form.subsistema} onChange={e=>setForm(f=>({...f,subsistema:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="hidraulico">Hidráulico</option>
+                <option value="mecanico">Mecánico</option>
+                <option value="neumatico">Neumático</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">COMPONENTE EN FALLA</label><input value={form.componente} onChange={e=>setForm(f=>({...f,componente:e.target.value}))} className={iCls} placeholder="ej: Motor, Válvula, Sensor, Cilindro..."/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">FALLA DETECTADA *</label><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve de la falla"/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DE LA FALLA</label><textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Detalla síntomas, condiciones, frecuencia..."/></div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label><select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} className={sCls}><option value="alta">Alta — Detiene operaciones</option><option value="media">Media — Afecta rendimiento</option><option value="baja">Baja — Sin impacto inmediato</option></select></div>
           </div>
           <ModalActions onSave={createReq} onCancel={()=>setShowForm(false)} label="Enviar Solicitud"/>
@@ -1043,7 +1054,7 @@ function DeviationReports({user,data,setData}){
   const {requests:allReqs,equip,users,wos}=data;
   const deviations=allReqs.filter(r=>r.source==="inspeccion");
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",subsistema:"",componente:"",description:"",priority:"media"});
   const role=user.role;
   const visible=role==="supervisor"?deviations:deviations.filter(d=>d.requestedBy===user.id);
 
@@ -1052,7 +1063,7 @@ function DeviationReports({user,data,setData}){
     const nd={id:uid(),...form,status:"pendiente",source:"inspeccion",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};
     const updated=[...allReqs,nd];
     setData(d=>({...d,requests:updated}));saveData("requests",updated);
-    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",subsistema:"",componente:"",description:"",priority:"media"});
   };
 
   const DEV_TYPE_LABEL={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía",desgaste:"Desgaste",otro:"Otro"};
@@ -1079,6 +1090,7 @@ function DeviationReports({user,data,setData}){
                   <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
                 </div>
                 <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
+                {(d.subsistema||d.componente)&&<div className="flex items-center gap-3 mb-1 text-xs"><span className="text-gray-400">Subsistema:</span><span className="font-medium text-gray-700">{({electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"})[d.subsistema]||d.subsistema||"—"}</span>{d.componente&&<><span className="text-gray-300">|</span><span className="text-gray-400">Componente:</span><span className="font-medium text-gray-700">{d.componente}</span></>}</div>}
                 <p className="text-gray-500 text-xs mb-2">{d.description}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                   <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.requestedAt)}</span>
@@ -1115,10 +1127,22 @@ function DeviationReports({user,data,setData}){
                 <option value="otro">Otro</option>
               </select>
             </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">SUBSISTEMA</label>
+              <select value={form.subsistema} onChange={e=>setForm(f=>({...f,subsistema:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="hidraulico">Hidráulico</option>
+                <option value="mecanico">Mecánico</option>
+                <option value="neumatico">Neumático</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">COMPONENTE EN FALLA</label>
+              <input value={form.componente} onChange={e=>setForm(f=>({...f,componente:e.target.value}))} className={iCls} placeholder="ej: Motor, Válvula, Sensor, Cilindro..."/>
+            </div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÍTULO / HALLAZGO *</label>
               <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve del hallazgo"/>
             </div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DETALLADA</label>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DE LA FALLA</label>
               <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Describe la desviación encontrada..."/>
             </div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label>
