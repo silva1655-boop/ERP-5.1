@@ -96,7 +96,7 @@ const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100
 const ROLE_CFG={
   supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
   mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","deviaciones","notifications"]},
 };
 
 const iCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
@@ -1013,7 +1013,7 @@ function DeviationReports({user,data,setData}){
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
   const role=user.role;
-  const visible=role==="supervisor"?deviations:deviations.filter(d=>d.reportedBy===user.id);
+  const visible=(role==="supervisor"||role==="operaciones")?deviations:deviations.filter(d=>d.reportedBy===user.id);
 
   const createDev=()=>{
     if(!form.equipId||!form.title)return;
@@ -1079,7 +1079,17 @@ function DeviationReports({user,data,setData}){
                   <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                     <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.reportedAt)}</span>
                   </div>
-                  {linkedOT&&<div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-1 rounded-full font-medium"><CheckCircle size={10}/>OT: {linkedOT.code}</div>}
+                  {linkedOT&&(
+                    <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+                      <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                        <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
+                        {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
+                        {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
+                      </div>
+                      {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                    </div>
+                  )}
                 </div>
                 {role==="supervisor"&&d.status==="pendiente"&&(
                   <div className="flex gap-2 flex-shrink-0">
@@ -1186,7 +1196,7 @@ export default function App(){
   );
 
   const pendingReqs=data.requests.filter(r=>r.status==="pendiente").length;
-  const devBadge=user?.role==="supervisor"?(data.deviations||[]).filter(d=>d.status==="pendiente").length:0;
+  const devBadge=(user?.role==="supervisor"||(user?.role==="operaciones"))?(data.deviations||[]).filter(d=>d.status==="pendiente").length:0;
 
   const handleChangePwd=(oldPwd,newPwd)=>{
     if(user.password!==oldPwd)return "La contraseña actual es incorrecta";
