@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 .env.local
+# Icons se regeneran con: node scripts/generate-icons.mjs
+public/icons/*.png
