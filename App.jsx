@@ -421,7 +421,7 @@ function Dashboard({user,data,onNav}){
 
 // ─── WORK ORDERS ─────────────────────────────────────────────────────────────
 function WorkOrders({user,data,setData}){
-  const {wos,equip,users}=data;
+  const {wos,equip,users,requests}=data;
   const [filter,setFilter]=useState("all"); const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null); const [showRep,setShowRep]=useState(false);
   const [rep,setRep]=useState({actualHours:"",observations:"",status:"completada"});
@@ -433,7 +433,15 @@ function WorkOrders({user,data,setData}){
     return true;
   });
   const updWO=(id,patch)=>{const u=wos.map(w=>w.id===id?{...w,...patch}:w);setData(d=>({...d,wos:u}));saveData("workOrders",u);if(sel?.id===id)setSel(s=>({...s,...patch}));};
-  const submitRep=()=>{if(!rep.actualHours)return;updWO(sel.id,{status:rep.status,actualHours:parseFloat(rep.actualHours),observations:rep.observations});setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});};
+  const submitRep=()=>{
+    if(!rep.actualHours)return;
+    updWO(sel.id,{status:rep.status,actualHours:parseFloat(rep.actualHours),observations:rep.observations});
+    if(rep.status==="completada"&&sel.reqId){
+      const updR=requests.map(r=>r.id===sel.reqId?{...r,status:"completada"}:r);
+      setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});
+  };
   const cur=sel?wos.find(w=>w.id===sel.id):null;
   const curEq=cur?equip.find(e=>e.id===cur.equipId):null;
   const curAs=cur?users.find(u=>u.id===cur.assignedTo):null;
@@ -495,7 +503,7 @@ function WorkOrders({user,data,setData}){
             <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[cur.priority]}`}>{cur.priority.toUpperCase()}</span>
           </div>
           <div className="space-y-2 mb-4 text-xs">
-            {[["Equipo",curEq?.name||"—"],["Código",curEq?.code||"—"],["Tipo",cur.type],["Fuente",cur.source==="plan"?"Plan Preventivo":"Solicitud"],["Programado",fmt(cur.scheduledDate)],["Horas Est.",`${cur.estimatedHours}h`],["Asignado a",curAs?.name||"—"]].map(([k,v])=>(
+            {[["Equipo",curEq?.name||"—"],["Código",curEq?.code||"—"],["Tipo",cur.type],["Fuente",cur.source==="plan"?"Plan Preventivo":cur.source==="inspeccion"?"Inspección":"Solicitud"],["Programado",fmt(cur.scheduledDate)],["Horas Est.",`${cur.estimatedHours}h`],["Asignado a",curAs?.name||"—"]].map(([k,v])=>(
               <div key={k} className="flex justify-between gap-2"><span className="text-gray-400">{k}</span><span className="text-gray-700 text-right">{v}</span></div>
             ))}
             {cur.actualHours&&<div className="flex justify-between"><span className="text-gray-400">Horas Reales</span><span className="text-emerald-600 font-semibold">{cur.actualHours}h</span></div>}
@@ -508,7 +516,14 @@ function WorkOrders({user,data,setData}){
               <button onClick={()=>setShowRep(true)} className="w-full text-white text-sm py-2 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}>Reportar Trabajo</button>
             </>}
             {role==="supervisor"&&cur.status!=="completada"&&cur.status!=="cancelada"&&(
-              <select value={cur.status} onChange={e=>updWO(cur.id,{status:e.target.value})} className={sCls}>
+              <select value={cur.status} onChange={e=>{
+                const s=e.target.value;
+                updWO(cur.id,{status:s});
+                if(s==="completada"&&cur.reqId){
+                  const updR=requests.map(r=>r.id===cur.reqId?{...r,status:"completada"}:r);
+                  setData(d=>({...d,requests:updR}));saveData("requests",updR);
+                }
+              }} className={sCls}>
                 <option value="pendiente">Pendiente</option><option value="asignada">Asignada</option>
                 <option value="en_proceso">En Proceso</option><option value="completada">Completada</option><option value="cancelada">Cancelada</option>
               </select>
@@ -889,7 +904,7 @@ function Requests({user,data,setData}){
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
       <div className="space-y-3">
         {visible.map(r=>{const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);return(
-          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":"border-gray-200"}`}>
+          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300 bg-emerald-50/30":"border-gray-200"}`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
