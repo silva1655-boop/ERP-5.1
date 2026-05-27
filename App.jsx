@@ -902,44 +902,99 @@ function Requests({user,data,setData}){
         {canCreate&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nueva Solicitud</button>}
       </div>
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
-      <div className="space-y-3">
-        {visible.map(r=>{const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);return(
-          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300 bg-emerald-50/30":"border-gray-200"}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <Badge s={r.status}/><span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
+      <div className="space-y-4">
+        {visible.map(r=>{
+          const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);
+          const SUBSIST={electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"};
+          const DEV_TYPE={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía Detectada",desgaste:"Desgaste / Deterioro",otro:"Otro"};
+          return(
+            <div key={r.id} className={`bg-white border rounded-xl shadow-sm overflow-hidden ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300":"border-gray-200"}`}>
+              {/* ── Header ── */}
+              <div className={`px-5 py-3 border-b flex items-center justify-between gap-3 flex-wrap ${r.status==="completada"?"bg-emerald-50/60 border-emerald-100":"bg-gray-50/60 border-gray-100"}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge s={r.status}/>
+                  <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
                   {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
+                  {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE[r.type]||r.type}</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
-                <p className="text-gray-800 font-semibold text-sm mb-1">{r.title}</p>
-                {(r.subsistema||r.componente)&&<div className="flex items-center gap-3 mb-1 text-xs"><span className="text-gray-400">Subsistema:</span><span className="font-medium text-gray-700">{({electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"})[r.subsistema]||r.subsistema||"—"}</span>{r.componente&&<><span className="text-gray-300">|</span><span className="text-gray-400">Componente:</span><span className="font-medium text-gray-700">{r.componente}</span></>}</div>}
-                <p className="text-gray-500 text-xs mb-2">{r.description}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap"><span>{eq?.name||"—"}</span><span>·</span><span>{reqBy?.name||"—"}</span><span>·</span><span>{fmtDT(r.requestedAt)}</span></div>
-                {linkedOT&&(
-                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
-                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
-                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
-                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
-                    </div>
-                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                {user.role==="supervisor"&&r.status==="pendiente"&&(
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
+                    {r.source==="inspeccion"
+                      ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                      :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                    }
                   </div>
                 )}
               </div>
-              {user.role==="supervisor"&&r.status==="pendiente"&&(
-                <div className="flex gap-2 flex-shrink-0 flex-col">
-                  <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
-                  {r.source==="inspeccion"
-                    ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
-                    :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
-                  }
+
+              {/* ── Body ── */}
+              <div className="p-5 space-y-3">
+                {/* Equipo */}
+                <div className="flex items-center gap-2">
+                  <Package size={13} className="text-gray-400 flex-shrink-0"/>
+                  <span className="text-gray-800 text-sm font-semibold">{eq?.name||"—"}</span>
+                  {eq?.code&&<span className="font-mono text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{eq.code}</span>}
+                  {eq?.location&&<span className="text-gray-400 text-xs">{eq.location}</span>}
                 </div>
-              )}
+
+                {/* Título / Falla */}
+                <div>
+                  <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-0.5">Falla Detectada</p>
+                  <p className="text-gray-900 font-bold text-sm">{r.title}</p>
+                </div>
+
+                {/* Subsistema + Componente */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Subsistema</p>
+                    <p className={`text-sm font-semibold ${r.subsistema?"text-gray-800":"text-gray-400"}`}>{SUBSIST[r.subsistema]||"—"}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Componente en Falla</p>
+                    <p className={`text-sm font-semibold ${r.componente?"text-gray-800":"text-gray-400"}`}>{r.componente||"—"}</p>
+                  </div>
+                </div>
+
+                {/* Descripción */}
+                {r.description&&(
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Descripción de la Falla</p>
+                    <p className="text-gray-700 text-sm leading-relaxed">{r.description}</p>
+                  </div>
+                )}
+
+                {/* Meta: quién reportó y cuándo */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-400 pt-1 border-t border-gray-100">
+                  <Users size={11}/>
+                  <span>Reportado por <span className="font-medium text-gray-600">{reqBy?.name||"—"}</span></span>
+                  <span>·</span>
+                  <span>{fmtDT(r.requestedAt)}</span>
+                </div>
+
+                {/* OT vinculada */}
+                {linkedOT&&(
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold"><CheckCircle size={12}/>OT Generada: {linkedOT.code}</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Estado</span><div className="mt-0.5"><Badge s={linkedOT.status}/></div></div>
+                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Mecánico</span><p className="text-gray-700 font-medium mt-0.5">{users.find(u=>u.id===linkedOT.assignedTo)?.name||"—"}</p></div>
+                      {linkedOT.scheduledDate&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Programado</span><p className="text-gray-700 font-medium mt-0.5">{fmt(linkedOT.scheduledDate)}</p></div>}
+                      {linkedOT.actualHours&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Horas Reales</span><p className="text-emerald-700 font-bold mt-0.5">{linkedOT.actualHours}h</p></div>}
+                    </div>
+                    {linkedOT.observations&&(
+                      <div className="border-t border-emerald-100 pt-2">
+                        <p className="text-gray-400 uppercase tracking-wide text-xs mb-0.5">Observaciones del Mecánico</p>
+                        <p className="text-gray-700 text-xs leading-relaxed">{linkedOT.observations}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );})}
+          );
+        })}
       </div>
       {showForm&&(
         <Modal title="Nueva Solicitud de Reparación" onClose={()=>setShowForm(false)}>
