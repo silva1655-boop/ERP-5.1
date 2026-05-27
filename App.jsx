@@ -43,10 +43,11 @@ const SEED_EQUIPMENT = [
   { id:"gru41",  code:"GRU-41",  name:"Grúa 41",     type:"Grúa Portuaria",   location:"Muelle",         criticality:"A", status:"operativo", lastMaint:"", nextMaint:"", hours:0 },
 ];
 
-const SEED_PM_PLANS    = [];
-const SEED_REQUESTS    = [];
-const SEED_WORK_ORDERS = [];
-const SEED_DEVIATIONS  = [];
+const SEED_PM_PLANS       = [];
+const SEED_REQUESTS       = [];
+const SEED_WORK_ORDERS    = [];
+const SEED_DEVIATIONS     = [];
+const SEED_TASK_TEMPLATES = [];
 
 // ─── COLECCIÓN NUEVA (fuerza reinicio de datos en Firebase) ──────────────────
 const COLL = "mantek_v2";
@@ -104,6 +105,7 @@ const iCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gra
 const sCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400";
 const card="bg-white border border-gray-200 rounded-xl shadow-sm";
 const btnPrimary="flex items-center gap-2 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm hover:opacity-90";
+const btnSecondary="flex items-center gap-2 font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm hover:opacity-90 border";
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function Modal({title,onClose,children,wide=false}){
@@ -421,7 +423,7 @@ function Dashboard({user,data,onNav}){
 
 // ─── WORK ORDERS ─────────────────────────────────────────────────────────────
 function WorkOrders({user,data,setData}){
-  const {wos,equip,users,requests}=data;
+  const {wos,equip,users,requests,plans}=data;
   const [filter,setFilter]=useState("all"); const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null); const [showRep,setShowRep]=useState(false);
   const [rep,setRep]=useState({actualHours:"",observations:"",status:"completada"});
@@ -439,6 +441,11 @@ function WorkOrders({user,data,setData}){
     if(rep.status==="completada"&&sel.reqId){
       const updR=requests.map(r=>r.id===sel.reqId?{...r,status:"completada"}:r);
       setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    if(rep.status==="completada"&&sel.planId){
+      const eqH=equip.find(e=>e.id===sel.equipId)?.hours||0;
+      const updP=plans.map(p=>p.id===sel.planId?{...p,lastHorometro:eqH,horometroTarget:eqH+(p.frequency||0)}:p);
+      setData(d=>({...d,plans:updP}));saveData("plans",updP);
     }
     setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});
   };
@@ -690,142 +697,295 @@ function Equipment({user,data,setData}){
 }
 
 // ─── PLANS ───────────────────────────────────────────────────────────────────
-const EMPTY_PLAN={name:"",frequency:"",unit:"días",nextDate:"",estimatedHours:"",technician:"",tasks:""};
+const EMPTY_TPL={name:"",frequency:"",estimatedHours:"",technician:"",tasks:""};
+const EMPTY_PLAN_FORM={equipId:"",name:"",frequency:"",lastHorometro:"",estimatedHours:"",technician:"",tasks:""};
 function Plans({user,data,setData}){
-  const {plans,equip,users,wos}=data;
-  const [showForm,setShowForm]=useState(false); const [showMasivo,setShowMasivo]=useState(false);
-  const [form,setForm]=useState({equipId:"",...EMPTY_PLAN});
-  const [mForm,setMForm]=useState(EMPTY_PLAN); const [selEquips,setSelEquips]=useState([]); const [mName,setMName]=useState("");
+  const {plans,equip,users,wos,taskTemplates}=data;
+  const [tab,setTab]=useState("planes");
+  const [showTplForm,setShowTplForm]=useState(false);
+  const [showAssign,setShowAssign]=useState(null);
+  const [showPlanForm,setShowPlanForm]=useState(false);
+  const [tplForm,setTplForm]=useState(EMPTY_TPL);
+  const [planForm,setPlanForm]=useState(EMPTY_PLAN_FORM);
+  const [selEquipsData,setSelEquipsData]=useState({});
+
   const genOT=(plan,allWOs)=>{
     const eq=equip.find(e=>e.id===plan.equipId);if(!eq)return null;
     const priority=eq.criticality==="A"?"alta":eq.criticality==="B"?"media":"baja";
-    return {id:uid(),code:nextOTCode(allWOs),type:"preventivo",equipId:plan.equipId,planId:plan.id,title:plan.name,priority,status:"asignada",assignedTo:plan.technician,createdAt:new Date().toISOString(),scheduledDate:plan.nextDate,estimatedHours:parseFloat(plan.estimatedHours)||0,actualHours:null,description:`OT automática. Tareas: ${Array.isArray(plan.tasks)?plan.tasks.join(", "):plan.tasks}`,observations:"",parts:[],source:"plan"};
+    return {id:uid(),code:nextOTCode(allWOs),type:"preventivo",equipId:plan.equipId,planId:plan.id,title:plan.name,priority,status:"asignada",assignedTo:plan.technician,createdAt:new Date().toISOString(),scheduledDate:"",estimatedHours:parseFloat(plan.estimatedHours)||0,actualHours:null,description:`OT automática. Tareas: ${Array.isArray(plan.tasks)?plan.tasks.join(", "):plan.tasks}`,observations:"",parts:[],source:"plan"};
   };
+
+  const saveTpl=()=>{
+    if(!tplForm.name||!tplForm.frequency)return;
+    const nt={id:uid(),...tplForm,frequency:parseInt(tplForm.frequency)||0,estimatedHours:parseFloat(tplForm.estimatedHours)||0,tasks:tplForm.tasks.split("\n").filter(Boolean)};
+    const upd=[...(taskTemplates||[]),nt];
+    setData(d=>({...d,taskTemplates:upd}));saveData("taskTemplates",upd);
+    setShowTplForm(false);setTplForm(EMPTY_TPL);
+  };
+
+  const deleteTpl=(id)=>{
+    const upd=(taskTemplates||[]).filter(t=>t.id!==id);
+    setData(d=>({...d,taskTemplates:upd}));saveData("taskTemplates",upd);
+  };
+
+  const assignTpl=()=>{
+    const ids=Object.keys(selEquipsData);
+    if(ids.length===0||!showAssign)return;
+    let newPlans=[...plans];
+    ids.forEach(eqId=>{
+      const eq=equip.find(e=>e.id===eqId);if(!eq)return;
+      const lastHoro=parseFloat(selEquipsData[eqId].lastHorometro)||0;
+      const np={id:uid(),templateId:showAssign.id,equipId:eqId,name:showAssign.name,frequency:showAssign.frequency,lastHorometro:lastHoro,horometroTarget:lastHoro+showAssign.frequency,estimatedHours:showAssign.estimatedHours,technician:showAssign.technician,tasks:showAssign.tasks};
+      newPlans.push(np);
+    });
+    setData(d=>({...d,plans:newPlans}));saveData("plans",newPlans);
+    setShowAssign(null);setSelEquipsData({});
+    alert(`✅ ${ids.length} planes creados`);
+  };
+
   const addPlan=()=>{
-    if(!form.equipId||!form.name)return;
-    const np={id:uid(),...form,frequency:parseInt(form.frequency)||0,estimatedHours:parseFloat(form.estimatedHours)||0,tasks:form.tasks.split("\n").filter(Boolean)};
+    if(!planForm.equipId||!planForm.name||!planForm.frequency)return;
+    const lastHoro=parseFloat(planForm.lastHorometro)||0;
+    const freq=parseInt(planForm.frequency)||0;
+    const np={id:uid(),equipId:planForm.equipId,name:planForm.name,frequency:freq,lastHorometro:lastHoro,horometroTarget:lastHoro+freq,estimatedHours:parseFloat(planForm.estimatedHours)||0,technician:planForm.technician,tasks:planForm.tasks.split("\n").filter(Boolean)};
     const updP=[...plans,np];const newOT=genOT(np,wos);const updW=newOT?[...wos,newOT]:wos;
     setData(d=>({...d,plans:updP,wos:updW}));saveData("plans",updP);saveData("workOrders",updW);
-    setShowForm(false);if(newOT)alert(`✅ OT ${newOT.code} generada`);
+    setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);if(newOT)alert(`✅ OT ${newOT.code} generada`);
   };
-  const addMasivo=()=>{
-    if(selEquips.length===0||!mName)return;
-    let allWOs=[...wos];let newPlans=[...plans];
-    selEquips.forEach(eqId=>{const eq=equip.find(e=>e.id===eqId);if(!eq)return;
-      const planName=mName.replace("{equipo}",eq.name).replace("{codigo}",eq.code);
-      const np={id:uid(),equipId:eqId,name:planName,frequency:parseInt(mForm.frequency)||0,unit:mForm.unit,nextDate:mForm.nextDate,tasks:mForm.tasks.split("\n").filter(Boolean),estimatedHours:parseFloat(mForm.estimatedHours)||0,technician:mForm.technician};
-      newPlans.push(np);const newOT=genOT(np,allWOs);if(newOT)allWOs.push(newOT);
-    });
-    setData(d=>({...d,plans:newPlans,wos:allWOs}));saveData("plans",newPlans);saveData("workOrders",allWOs);
-    setShowMasivo(false);setSelEquips([]);setMForm(EMPTY_PLAN);setMName("");
-    alert(`✅ ${selEquips.length} planes creados`);
-  };
+
   const generateOT=plan=>{const newOT=genOT(plan,wos);if(!newOT)return;const updW=[...wos,newOT];setData(d=>({...d,wos:updW}));saveData("workOrders",updW);alert(`✅ OT ${newOT.code} — Prioridad ${newOT.priority.toUpperCase()}`);};
+
+  const deletePlan=(id)=>{
+    const upd=plans.filter(p=>p.id!==id);
+    setData(d=>({...d,plans:upd}));saveData("plans",upd);
+  };
+
+  const tpls=taskTemplates||[];
+
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
-        <div><h1 className="text-gray-900 font-bold text-xl">Plan de Mantenimiento Preventivo</h1><p className="text-gray-500 text-sm">Programación automática de OT</p></div>
+        <div><h1 className="text-gray-900 font-bold text-xl">Plan de Mantenimiento Preventivo</h1><p className="text-gray-500 text-sm">Programación por horómetro</p></div>
         {user.role==="supervisor"&&<div className="flex gap-2">
-          <button onClick={()=>setShowMasivo(true)} className={btnPrimary} style={{background:`linear-gradient(90deg,${NV.navy},${NV.blue})`}}><Layers size={15}/>Plan Masivo</button>
-          <button onClick={()=>setShowForm(true)}   className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Plan</button>
+          <button onClick={()=>setShowTplForm(true)} className={btnSecondary} style={{borderColor:NV.blue,color:NV.blue,background:"white"}}><ClipboardList size={15}/>Nueva Plantilla</button>
+          <button onClick={()=>setShowPlanForm(true)} className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Plan</button>
         </div>}
       </div>
-      {plans.length===0&&<div className="text-center py-16 text-gray-400"><Calendar size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea un plan individual o aplica un plan masivo a múltiples equipos</p></div>}
-      <div className="space-y-4">
-        {plans.map(p=>{
-          const eq=equip.find(e=>e.id===p.equipId);const tech=users.find(u=>u.id===p.technician);
-          const linked=wos.filter(w=>w.planId===p.id);const daysLeft=Math.ceil((new Date(p.nextDate)-new Date())/86400000);
-          return(
-            <div key={p.id} className={`${card} p-5 hover:shadow-md transition`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
-                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${daysLeft<=0?"text-red-700 bg-red-50 border-red-200":daysLeft<=7?"text-red-700 bg-red-50 border-red-200":daysLeft<=30?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
-                      {daysLeft<=0?"VENCIDO":`En ${daysLeft}d`}
-                    </span>
-                  </div>
-                  <p className="text-gray-800 font-semibold text-sm mb-2">{p.name}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
-                    <span className="flex items-center gap-1"><RefreshCw size={10}/>Cada {p.frequency} {p.unit}</span>
-                    <span className="flex items-center gap-1"><Calendar size={10}/>Prox: {fmt(p.nextDate)}</span>
-                    <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
-                    {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
-                  </div>
-                  {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
-                </div>
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className="text-gray-400 text-xs">{linked.length} OT</span>
-                  {user.role==="supervisor"&&<button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-lg w-fit">
+        {[["planes","Planes Activos"],["plantillas","Plantillas"]].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${tab===t?"bg-white text-gray-900 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>{l}</button>
+        ))}
       </div>
-      {showForm&&(
-        <Modal title="Nuevo Plan de Mantenimiento" onClose={()=>setShowForm(false)}>
-          <div className="space-y-3">
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label><select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL PLAN</label><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} className={iCls}/></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA</label><input type="number" value={form.frequency} onChange={e=>setForm(f=>({...f,frequency:e.target.value}))} className={iCls}/></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">UNIDAD</label><select value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))} className={sCls}><option value="días">Días</option><option value="horas">Horas</option><option value="semanas">Semanas</option></select></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRÓXIMA FECHA</label><input type="date" value={form.nextDate} onChange={e=>setForm(f=>({...f,nextDate:e.target.value}))} className={iCls}/></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={form.estimatedHours} onChange={e=>setForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
-            </div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO ASIGNADO</label><select value={form.technician} onChange={e=>setForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={form.tasks} onChange={e=>setForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+
+      {tab==="planes"&&(
+        <>
+          {plans.length===0&&<div className="text-center py-16 text-gray-400"><Gauge size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea una plantilla y asígnala a equipos, o crea un plan individual</p></div>}
+          <div className="space-y-4">
+            {plans.map(p=>{
+              const eq=equip.find(e=>e.id===p.equipId);const tech=users.find(u=>u.id===p.technician);
+              const linked=wos.filter(w=>w.planId===p.id);
+              const curH=eq?.hours||0;
+              const range=p.horometroTarget-p.lastHorometro;
+              const pct=range>0?Math.min(100,Math.max(0,((curH-p.lastHorometro)/range)*100)):100;
+              const hl=p.horometroTarget-curH;
+              const overdue=curH>=p.horometroTarget;
+              const soon=!overdue&&hl<=(p.frequency||0)*0.1;
+              return(
+                <div key={p.id} className={`${card} p-5 hover:shadow-md transition`}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
+                        <span className="text-gray-600 text-xs font-medium">{eq?.name}</span>
+                        <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${overdue?"text-red-700 bg-red-50 border-red-200":soon?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                          {overdue?"VENCIDO":soon?`PRÓXIMO (+${Math.round(hl)}h)`:`En ${Math.round(hl)}h`}
+                        </span>
+                      </div>
+                      <p className="text-gray-800 font-semibold text-sm mb-3">{p.name}</p>
+                      <div className="mb-3">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{p.lastHorometro.toLocaleString()}h</span>
+                          <span className="font-semibold" style={{color:overdue?"#b91c1c":NV.navy}}>Actual: {curH.toLocaleString()}h</span>
+                          <span>Meta: {p.horometroTarget.toLocaleString()}h</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${overdue?"bg-red-500":soon?"bg-amber-400":"bg-emerald-500"}`} style={{width:`${pct}%`}}/>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Frecuencia: cada {p.frequency}h · {linked.length} OT historial</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                        <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
+                        {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
+                      </div>
+                      {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {user.role==="supervisor"&&<>
+                        <button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>
+                        <button onClick={()=>deletePlan(p.id)} className="text-xs text-gray-300 hover:text-red-500 transition p-1"><Trash2 size={13}/></button>
+                      </>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <ModalActions onSave={addPlan} onCancel={()=>setShowForm(false)} label="Guardar y Generar OT"/>
+        </>
+      )}
+
+      {tab==="plantillas"&&(
+        <>
+          {tpls.length===0&&<div className="text-center py-16 text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin plantillas</p><p className="text-sm mt-1">Crea plantillas reutilizables y asígnalas a múltiples equipos con un clic</p></div>}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {tpls.map(t=>{
+              const tech=users.find(u=>u.id===t.technician);
+              const usedCount=plans.filter(p=>p.templateId===t.id).length;
+              return(
+                <div key={t.id} className={`${card} p-4 hover:shadow-md transition`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-gray-800 font-semibold text-sm">{t.name}</p>
+                      <p className="text-gray-400 text-xs mt-0.5">Cada {t.frequency}h · {t.estimatedHours}h est.</p>
+                    </div>
+                    {user.role==="supervisor"&&<div className="flex gap-1 flex-shrink-0">
+                      <button onClick={()=>{setSelEquipsData({});setShowAssign(t);}} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white transition hover:opacity-90 flex items-center gap-1" style={{background:NV.blue}}><Layers size={11}/>Asignar</button>
+                      <button onClick={()=>deleteTpl(t.id)} className="text-gray-300 hover:text-red-500 p-1 transition"><Trash2 size={13}/></button>
+                    </div>}
+                  </div>
+                  {tech&&<p className="text-xs text-gray-400 mb-2 flex items-center gap-1"><Users size={10}/>{tech.name}</p>}
+                  {Array.isArray(t.tasks)&&t.tasks.length>0&&<div className="flex flex-wrap gap-1 mb-3">{t.tasks.map((task,i)=><span key={i} className="text-xs border px-1.5 py-0.5 rounded" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{task}</span>)}</div>}
+                  <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">{usedCount} equipo{usedCount!==1?"s":""} asignado{usedCount!==1?"s":""}</p>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Nueva Plantilla */}
+      {showTplForm&&(
+        <Modal title="Nueva Plantilla de Tarea" onClose={()=>{setShowTplForm(false);setTplForm(EMPTY_TPL);}}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE</label><input value={tplForm.name} onChange={e=>setTplForm(f=>({...f,name:e.target.value}))} className={iCls} placeholder="ej: Servicio 250h"/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA (horas)</label><input type="number" value={tplForm.frequency} onChange={e=>setTplForm(f=>({...f,frequency:e.target.value}))} className={iCls} placeholder="250"/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={tplForm.estimatedHours} onChange={e=>setTplForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls} placeholder="4"/></div>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO ASIGNADO</label><select value={tplForm.technician} onChange={e=>setTplForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={tplForm.tasks} onChange={e=>setTplForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+          </div>
+          <ModalActions onSave={saveTpl} onCancel={()=>{setShowTplForm(false);setTplForm(EMPTY_TPL);}} label="Guardar Plantilla"/>
         </Modal>
       )}
-      {showMasivo&&(
-        <Modal title="Plan Masivo — Múltiples equipos" onClose={()=>setShowMasivo(false)} wide={true}>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-blue-700 text-xs flex items-start gap-2">
+
+      {/* Asignar Plantilla a Equipos */}
+      {showAssign&&(
+        <Modal title={`Asignar: ${showAssign.name}`} onClose={()=>{setShowAssign(null);setSelEquipsData({});}} wide={true}>
+          <div className="rounded-lg p-3 mb-4 text-xs flex items-start gap-2" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
             <Info size={14} className="flex-shrink-0 mt-0.5"/>
-            <span>Usa <strong>{"{equipo}"}</strong> o <strong>{"{codigo}"}</strong> en el nombre para personalizarlo por equipo.</span>
+            <span>Frecuencia: <strong>cada {showAssign.frequency}h</strong>. Ingresa el horómetro de la última intervención por equipo. El próximo se calculará automáticamente.</span>
           </div>
           <div className="grid grid-cols-2 gap-5">
             <div>
-              <p className="text-gray-700 font-semibold text-sm mb-2">Equipos <span style={{color:NV.blue}}>({selEquips.length})</span></p>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                {equip.map(e=>{const checked=selEquips.includes(e.id);return(
-                  <label key={e.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition ${checked?"border-blue-300":"bg-gray-50 border-gray-200 hover:border-gray-300"}`} style={checked?{background:NV.light}:{}}>
-                    <input type="checkbox" checked={checked} onChange={()=>setSelEquips(s=>s.includes(e.id)?s.filter(x=>x!==e.id):[...s,e.id])} className="w-4 h-4" style={{accentColor:NV.blue}}/>
-                    <div><p className="text-gray-800 text-xs font-semibold">{e.name}</p><p className="text-gray-400 text-xs">{e.code}</p></div>
-                  </label>
-                );})}
+              <p className="text-gray-700 font-semibold text-sm mb-2">Equipos <span style={{color:NV.blue}}>({Object.keys(selEquipsData).length} sel.)</span></p>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                {equip.map(e=>{
+                  const checked=!!selEquipsData[e.id];
+                  return(
+                    <div key={e.id} className={`rounded-lg border transition ${checked?"border-blue-300":"bg-gray-50 border-gray-200 hover:border-gray-300"}`} style={checked?{background:NV.light}:{}}>
+                      <label className="flex items-center gap-2.5 p-2.5 cursor-pointer" onClick={()=>{
+                        if(checked){const n={...selEquipsData};delete n[e.id];setSelEquipsData(n);}
+                        else setSelEquipsData(s=>({...s,[e.id]:{lastHorometro:String(e.hours)}}));
+                      }}>
+                        <input type="checkbox" checked={checked} readOnly className="w-4 h-4 flex-shrink-0" style={{accentColor:NV.blue}}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 text-xs font-semibold">{e.name}</p>
+                          <p className="text-gray-400 text-xs">{e.code} · {e.hours.toLocaleString()}h actuales</p>
+                        </div>
+                      </label>
+                      {checked&&(
+                        <div className="px-2.5 pb-2.5 flex items-end gap-2">
+                          <div className="flex-1">
+                            <p className="text-gray-400 text-xs mb-0.5">Último horómetro de intervención</p>
+                            <input type="number" value={selEquipsData[e.id].lastHorometro} onChange={ev=>setSelEquipsData(s=>({...s,[e.id]:{lastHorometro:ev.target.value}}))} className={iCls+" py-1 text-xs"} onClick={ev=>ev.stopPropagation()}/>
+                          </div>
+                          <div className="text-right flex-shrink-0 pb-1">
+                            <p className="text-gray-400 text-xs">Próximo</p>
+                            <p className="font-bold text-sm" style={{color:NV.blue}}>{((parseFloat(selEquipsData[e.id].lastHorometro)||0)+showAssign.frequency).toLocaleString()}h</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2 mt-2">
-                <button onClick={()=>setSelEquips(equip.map(e=>e.id))} className="flex-1 text-xs hover:underline py-1" style={{color:NV.blue}}>Todos</button>
-                <button onClick={()=>setSelEquips([])} className="flex-1 text-xs text-gray-400 hover:underline py-1">Limpiar</button>
+                <button onClick={()=>{const n={};equip.forEach(e=>{n[e.id]={lastHorometro:String(e.hours)}});setSelEquipsData(n);}} className="flex-1 text-xs hover:underline py-1" style={{color:NV.blue}}>Todos</button>
+                <button onClick={()=>setSelEquipsData({})} className="flex-1 text-xs text-gray-400 hover:underline py-1">Limpiar</button>
               </div>
             </div>
-            <div className="space-y-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE</label><input value={mName} onChange={e=>setMName(e.target.value)} className={iCls} placeholder="Servicio 250h - {equipo}"/></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA</label><input type="number" value={mForm.frequency} onChange={e=>setMForm(f=>({...f,frequency:e.target.value}))} className={iCls}/></div>
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">UNIDAD</label><select value={mForm.unit} onChange={e=>setMForm(f=>({...f,unit:e.target.value}))} className={sCls}><option value="días">Días</option><option value="horas">Horas</option><option value="semanas">Semanas</option></select></div>
+            <div>
+              <p className="text-gray-700 font-semibold text-sm mb-2">Vista previa</p>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {Object.keys(selEquipsData).length===0
+                  ?<p className="text-gray-400 text-xs py-4 text-center">Selecciona equipos a la izquierda</p>
+                  :Object.entries(selEquipsData).map(([eqId,d])=>{
+                    const eq=equip.find(e=>e.id===eqId);if(!eq)return null;
+                    const lastH=parseFloat(d.lastHorometro)||0;
+                    const target=lastH+showAssign.frequency;
+                    const hl=target-eq.hours;
+                    const overdue=eq.hours>=target;
+                    return(
+                      <div key={eqId} className="p-3 rounded-lg border" style={{background:NV.light,borderColor:"#BFD9F2"}}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-xs font-semibold" style={{color:NV.navy}}>{eq.name} <span className="font-normal text-gray-400">({eq.code})</span></p>
+                            <p className="text-xs text-gray-500 mt-0.5">{lastH.toLocaleString()}h → <strong>{target.toLocaleString()}h</strong></p>
+                          </div>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold flex-shrink-0 ${overdue?"text-red-700 bg-red-100":hl<=(showAssign.frequency*0.1)?"text-amber-700 bg-amber-100":"text-emerald-700 bg-emerald-100"}`}>
+                            {overdue?"VENCIDO":`+${Math.round(hl)}h`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRÓXIMA FECHA</label><input type="date" value={mForm.nextDate} onChange={e=>setMForm(f=>({...f,nextDate:e.target.value}))} className={iCls}/></div>
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={mForm.estimatedHours} onChange={e=>setMForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
-              </div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO</label><select value={mForm.technician} onChange={e=>setMForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={mForm.tasks} onChange={e=>setMForm(f=>({...f,tasks:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder={"Cambio aceite\nFiltros\nRevisión general"}/></div>
             </div>
           </div>
-          {selEquips.length>0&&mName&&(
-            <div className="mt-4 rounded-lg p-3 text-xs border" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>
-              <p className="font-semibold mb-1">Vista previa:</p>
-              {selEquips.slice(0,3).map(id=>{const eq=equip.find(e=>e.id===id);return<p key={id}>• {mName.replace("{equipo}",eq?.name||"").replace("{codigo}",eq?.code||"")}</p>;})}
-              {selEquips.length>3&&<p className="opacity-60">... y {selEquips.length-3} más</p>}
+          <ModalActions onSave={assignTpl} onCancel={()=>{setShowAssign(null);setSelEquipsData({});}} label={`Crear ${Object.keys(selEquipsData).length} Planes`}/>
+        </Modal>
+      )}
+
+      {/* Nuevo Plan Individual */}
+      {showPlanForm&&(
+        <Modal title="Nuevo Plan Individual" onClose={()=>{setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);}}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+              <select value={planForm.equipId} onChange={e=>{const eq=equip.find(q=>q.id===e.target.value);setPlanForm(f=>({...f,equipId:e.target.value,lastHorometro:eq?String(eq.hours):""}));}} className={sCls}>
+                <option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code}) — {e.hours.toLocaleString()}h</option>)}
+              </select>
             </div>
-          )}
-          <ModalActions onSave={addMasivo} onCancel={()=>setShowMasivo(false)} label={`Crear ${selEquips.length} Planes`}/>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL PLAN</label><input value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} className={iCls} placeholder="ej: Servicio 250h"/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA (horas)</label><input type="number" value={planForm.frequency} onChange={e=>setPlanForm(f=>({...f,frequency:e.target.value}))} className={iCls} placeholder="250"/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">ÚLTIMO HORÓMETRO</label><input type="number" value={planForm.lastHorometro} onChange={e=>setPlanForm(f=>({...f,lastHorometro:e.target.value}))} className={iCls} placeholder="ej: 1000"/></div>
+            </div>
+            {planForm.frequency&&planForm.lastHorometro&&(
+              <div className="rounded-lg p-2.5 text-xs flex items-center gap-2" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
+                <Gauge size={13}/>
+                <span>Próxima intervención: <strong>{(parseFloat(planForm.lastHorometro)+parseInt(planForm.frequency)).toLocaleString()}h</strong></span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={planForm.estimatedHours} onChange={e=>setPlanForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO</label><select value={planForm.technician} onChange={e=>setPlanForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={planForm.tasks} onChange={e=>setPlanForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+          </div>
+          <ModalActions onSave={addPlan} onCancel={()=>{setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);}} label="Guardar Plan"/>
         </Modal>
       )}
     </div>
@@ -1243,13 +1403,13 @@ function Notifications({user,data}){
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
   const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
-  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS});
+  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES});
   const unsubs=useRef([]);
 
   useEffect(()=>{
-    const keys=["users","equipment","plans","requests","workOrders"];
-    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS};
-    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos"};
+    const keys=["users","equipment","plans","requests","workOrders","taskTemplates"];
+    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES};
+    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",taskTemplates:"taskTemplates"};
     (async()=>{
       for(const k of keys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
