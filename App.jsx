@@ -84,6 +84,7 @@ const ST = {
   cancelada:     {label:"Cancelada",     cls:"text-red-700     bg-red-50      border-red-200"    },
   aprobada:      {label:"Aprobada",      cls:"text-emerald-700 bg-emerald-50  border-emerald-200"},
   rechazada:     {label:"Rechazada",     cls:"text-red-700     bg-red-50      border-red-200"    },
+  revisado:      {label:"Revisado",      cls:"text-blue-700    bg-blue-50     border-blue-200"   },
   operativo:     {label:"Operativo",     cls:"text-emerald-700 bg-emerald-50  border-emerald-200"},
   mantenimiento: {label:"Mantenimiento", cls:"text-amber-700   bg-amber-50    border-amber-200"  },
   falla:         {label:"Falla",         cls:"text-red-700     bg-red-50      border-red-200"    },
@@ -96,7 +97,7 @@ const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100
 const ROLE_CFG={
   supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
   mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","deviaciones","notifications"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
 };
 
 const iCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
@@ -874,10 +875,11 @@ function Requests({user,data,setData}){
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media"});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
-  const visible=user.role==="supervisor"?requests:requests.filter(r=>r.requestedBy===user.id);
-  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
-  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`Reparación ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
+  const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
+  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
+  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
+  const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
@@ -887,22 +889,36 @@ function Requests({user,data,setData}){
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
       <div className="space-y-3">
         {visible.map(r=>{const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);return(
-          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?"border-blue-300":"border-gray-200"}`}>
+          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":"border-gray-200"}`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Badge s={r.status}/><span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
+                  {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
                 <p className="text-gray-800 font-semibold text-sm mb-1">{r.title}</p>
                 <p className="text-gray-500 text-xs mb-2">{r.description}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap"><span>{eq?.name||"—"}</span><span>·</span><span>{reqBy?.name||"—"}</span><span>·</span><span>{fmtDT(r.requestedAt)}</span></div>
-                {linkedOT&&<div className="mt-2 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-1 rounded-full font-medium"><CheckCircle size={10}/>OT: {linkedOT.code}</div>}
+                {linkedOT&&(
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
+                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
+                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
+                    </div>
+                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                  </div>
+                )}
               </div>
               {user.role==="supervisor"&&r.status==="pendiente"&&(
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex gap-2 flex-shrink-0 flex-col">
                   <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
-                  <button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                  {r.source==="inspeccion"
+                    ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                    :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                  }
                 </div>
               )}
             </div>
@@ -1009,53 +1025,28 @@ function UsersPage({data,setData}){
 
 // ─── DEVIATION REPORTS ───────────────────────────────────────────────────────
 function DeviationReports({user,data,setData}){
-  const {deviations,equip,users,wos}=data;
+  const {requests:allReqs,equip,users,wos}=data;
+  const deviations=allReqs.filter(r=>r.source==="inspeccion");
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
   const role=user.role;
-  const visible=(role==="supervisor"||role==="operaciones")?deviations:deviations.filter(d=>d.reportedBy===user.id);
+  const visible=role==="supervisor"?deviations:deviations.filter(d=>d.requestedBy===user.id);
 
   const createDev=()=>{
     if(!form.equipId||!form.title)return;
-    const nd={id:uid(),...form,status:"pendiente",reportedBy:user.id,reportedAt:new Date().toISOString(),reviewedBy:null,otId:null};
-    const updated=[...deviations,nd];
-    setData(d=>({...d,deviations:updated}));saveData("deviations",updated);
+    const nd={id:uid(),...form,status:"pendiente",source:"inspeccion",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};
+    const updated=[...allReqs,nd];
+    setData(d=>({...d,requests:updated}));saveData("requests",updated);
     setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
   };
 
-  const createOT=dev=>{
-    const eq=equip.find(e=>e.id===dev.equipId);
-    const priority=dev.priority==="alta"||eq?.criticality==="A"?"alta":dev.priority;
-    const mec=users.find(u=>u.role==="mecanico");
-    const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:dev.equipId,planId:null,
-      title:`Inspección ${eq?.name||""} - ${dev.title}`,priority,status:"pendiente",assignedTo:mec?.id||"",
-      createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),
-      estimatedHours:priority==="alta"?4:2,actualHours:null,description:dev.description,
-      observations:"",parts:[],source:"inspeccion",reqId:dev.id};
-    const updW=[...wos,newOT];
-    const updD=deviations.map(d=>d.id===dev.id?{...d,status:"ot_creada",reviewedBy:user.id,otId:newOT.id}:d);
-    setData(d=>({...d,wos:updW,deviations:updD}));
-    saveData("workOrders",updW);saveData("deviations",updD);
-    alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);
-  };
-
-  const markReviewed=dev=>{
-    const updated=deviations.map(d=>d.id===dev.id?{...d,status:"revisado",reviewedBy:user.id}:d);
-    setData(d=>({...d,deviations:updated}));saveData("deviations",updated);
-  };
-
   const DEV_TYPE_LABEL={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía",desgaste:"Desgaste",otro:"Otro"};
-  const DEV_ST={
-    pendiente:{label:"Pendiente",cls:"text-amber-700 bg-amber-50 border-amber-200"},
-    revisado: {label:"Revisado", cls:"text-blue-700 bg-blue-50 border-blue-200"},
-    ot_creada:{label:"OT Creada",cls:"text-emerald-700 bg-emerald-50 border-emerald-200"},
-  };
 
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-gray-900 font-bold text-xl">Reportes de Inspección</h1>
+          <h1 className="text-gray-900 font-bold text-xl">Mis Reportes de Inspección</h1>
           <p className="text-gray-500 text-sm">{visible.length} reportes · {visible.filter(d=>d.status==="pendiente").length} pendientes</p>
         </div>
         {role==="mecanico"&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nuevo Reporte</button>}
@@ -1063,38 +1054,29 @@ function DeviationReports({user,data,setData}){
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><FileWarning size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin reportes de inspección</p></div>}
       <div className="space-y-3">
         {visible.map(d=>{
-          const eq=equip.find(e=>e.id===d.equipId);const repBy=users.find(u=>u.id===d.reportedBy);const linkedOT=wos.find(w=>w.id===d.otId);
-          const st=DEV_ST[d.status]||DEV_ST.pendiente;
+          const eq=equip.find(e=>e.id===d.equipId);const repBy=users.find(u=>u.id===d.requestedBy);const linkedOT=wos.find(w=>w.id===d.otId);
           return(
             <div key={d.id} className={`bg-white border rounded-xl p-5 shadow-sm ${d.status==="pendiente"?"border-amber-300":"border-gray-200"}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${st.cls}`}>{st.label}</span>
-                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[d.priority]}`}>{d.priority.toUpperCase()}</span>
-                    <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
-                  </div>
-                  <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
-                  <p className="text-gray-500 text-xs mb-2">{d.description}</p>
-                  <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
-                    <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.reportedAt)}</span>
-                  </div>
-                  {linkedOT&&(
-                    <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                        <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
-                        {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
-                        {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
-                      </div>
-                      {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
-                    </div>
-                  )}
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <Badge s={d.status}/>
+                  <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[d.priority]}`}>{d.priority.toUpperCase()}</span>
+                  <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
                 </div>
-                {role==="supervisor"&&d.status==="pendiente"&&(
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={()=>createOT(d)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Plus size={12}/>Crear OT</button>
-                    <button onClick={()=>markReviewed(d)} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 text-gray-700 text-xs px-3 py-1.5 rounded-lg hover:bg-gray-100 transition font-medium"><Check size={12}/>Revisar</button>
+                <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
+                <p className="text-gray-500 text-xs mb-2">{d.description}</p>
+                <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                  <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.requestedAt)}</span>
+                </div>
+                {linkedOT&&(
+                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
+                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
+                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
+                    </div>
+                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
                   </div>
                 )}
               </div>
@@ -1167,13 +1149,13 @@ function Notifications({user,data}){
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
   const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
-  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,deviations:SEED_DEVIATIONS});
+  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS});
   const unsubs=useRef([]);
 
   useEffect(()=>{
-    const keys=["users","equipment","plans","requests","workOrders","deviations"];
-    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,deviations:SEED_DEVIATIONS};
-    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",deviations:"deviations"};
+    const keys=["users","equipment","plans","requests","workOrders"];
+    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS};
+    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos"};
     (async()=>{
       for(const k of keys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
@@ -1196,7 +1178,7 @@ export default function App(){
   );
 
   const pendingReqs=data.requests.filter(r=>r.status==="pendiente").length;
-  const devBadge=(user?.role==="supervisor"||(user?.role==="operaciones"))?(data.deviations||[]).filter(d=>d.status==="pendiente").length:0;
+  const devBadge=user?.role==="supervisor"?data.requests.filter(r=>r.source==="inspeccion"&&r.status==="pendiente").length:0;
 
   const handleChangePwd=(oldPwd,newPwd)=>{
     if(user.password!==oldPwd)return "La contraseña actual es incorrecta";
