@@ -69,11 +69,11 @@ const CHECKLIST_TEMPLATES = {
         {id:"tc_frenos",      name:"Frenos — funcionamiento",              method:"Prueba después del desplazamiento",            icon:"🛑"},
       ]},
       {label:"Suspensión y Neumáticos", items:[
-        {id:"tc_acopl",       name:"Acoplamiento de la rueda",             method:"Visualmente",                                  icon:"🔩"},
-        {id:"tc_neum_del",    name:"Neumático delantero",                  method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
-        {id:"tc_neum_tra",    name:"Neumático trasero",                    method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
-        {id:"tc_neum_ti",     name:"Neumático trasero izquierdo",          method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
-        {id:"tc_neum_td",     name:"Neumático trasero derecho",            method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_acopl",       name:"Acoplamiento de la rueda",                      method:"Visualmente",                                  icon:"🔩"},
+        {id:"tc_neum_del_d",  name:"Neumático delantero derecho",                   method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_del_i",  name:"Neumático delantero izquierdo",                 method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_ti",     name:"Neumático trasero izquierdo (vista desde atrás)",method:"Visualmente — cortes, presión, deformación",  icon:"🔵"},
+        {id:"tc_neum_td",     name:"Neumático trasero derecho (vista desde atrás)", method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
       ]},
       {label:"Cabina y Luces", items:[
         {id:"tc_luces_f",     name:"Luces faeneras y señalización",        method:"Visualmente / escuchando zumbadores",          icon:"🔦"},
@@ -1193,12 +1193,25 @@ function Requests({user,data,setData}){
   const {requests,equip,users,wos}=data;
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});
+  const [showCLProc,setShowCLProc]=useState(false);
+  const [clProc,setClProc]=useState({req:null,priority:"media",subsistema:"",componente:"",description:""});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
   const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
   const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});};
-  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const isCL=req.source==="checklist";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isCL?"Checklist":isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
+  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
+  const openCLProc=r=>{ setClProc({req:r,priority:r.priority||"media",subsistema:r.subsistema||"",componente:r.componente||r.items?.[0]?.name||"",description:r.description||""}); setShowCLProc(true); };
+  const submitCLProc=()=>{
+    const {req,priority,subsistema,componente,description}=clProc;
+    if(!componente)return;
+    const newSol={id:uid(),title:req.title,equipId:req.equipId,subsistema,componente,description,priority,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null,fromChecklistId:req.id};
+    const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id}:r);
+    const finalR=[...updR,newSol];
+    setData(d=>({...d,requests:finalR}));saveData("requests",finalR);
+    setShowCLProc(false);
+    alert("✅ Solicitud enviada al Supervisor para su aprobación y asignación de OT");
+  };
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
@@ -1223,14 +1236,23 @@ function Requests({user,data,setData}){
                   {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE[r.type]||r.type}</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
-                {(user.role==="supervisor"||(user.role==="operaciones"&&r.source==="checklist"))&&r.status==="pendiente"&&(
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Crear OT</button>
-                    {r.source==="inspeccion"
-                      ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
-                      :r.source!=="checklist"&&<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
-                    }
-                  </div>
+                {r.status==="pendiente"&&(
+                  <>
+                    {user.role==="operaciones"&&r.source==="checklist"&&(
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={()=>openCLProc(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:"#16a34a"}}><ClipboardList size={12}/>Procesar</button>
+                      </div>
+                    )}
+                    {user.role==="supervisor"&&(
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
+                        {r.source==="inspeccion"
+                          ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                          :<button onClick={()=>reject(r)} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                        }
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1301,6 +1323,39 @@ function Requests({user,data,setData}){
           );
         })}
       </div>
+      {showCLProc&&clProc.req&&(
+        <Modal title={`Procesar Checklist — ${equip.find(e=>e.id===clProc.req.equipId)?.code||""}`} onClose={()=>setShowCLProc(false)}>
+          <div className="space-y-3">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-green-700 text-xs font-medium uppercase tracking-wide mb-1">Observaciones del Checklist</p>
+              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">{clProc.req.description}</p>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label>
+              <select value={clProc.priority} onChange={e=>setClProc(c=>({...c,priority:e.target.value}))} className={sCls}>
+                <option value="alta">Alta — Detiene operaciones</option>
+                <option value="media">Media — Afecta rendimiento</option>
+                <option value="baja">Baja — Sin impacto inmediato</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">SUBSISTEMA</label>
+              <select value={clProc.subsistema} onChange={e=>setClProc(c=>({...c,subsistema:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="hidraulico">Hidráulico</option>
+                <option value="mecanico">Mecánico</option>
+                <option value="neumatico">Neumático</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">COMPONENTE EN FALLA *</label>
+              <input value={clProc.componente} onChange={e=>setClProc(c=>({...c,componente:e.target.value}))} className={iCls} placeholder="ej: Motor, Válvula, Sensor, Cilindro..."/>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">OBSERVACIONES PARA EL SUPERVISOR</label>
+              <textarea value={clProc.description} onChange={e=>setClProc(c=>({...c,description:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder="Detalla el problema para el supervisor..."/>
+            </div>
+          </div>
+          <ModalActions onSave={submitCLProc} onCancel={()=>setShowCLProc(false)} label="Enviar Solicitud al Supervisor"/>
+        </Modal>
+      )}
       {showForm&&(
         <Modal title="Nueva Solicitud de Reparación" onClose={()=>setShowForm(false)}>
           <div className="space-y-3">
