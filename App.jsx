@@ -180,7 +180,7 @@ const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100
 const ROLE_CFG={
   supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,       nav:["dashboard","workorders","equipment","plans","indicadores","requests","checklist","deviaciones","reports","users"]},
   mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,       nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","notifications"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","checklist","notifications"]},
   operador:   {label:"Operador",   color:"text-green-300", bg:"bg-green-900/30",  icon:ClipboardList,nav:["dashboard","checklist","notifications"]},
 };
 
@@ -1612,31 +1612,32 @@ function Checklist({user,data,setData}){
     const updC=[...allCL,newCL];
     setData(d=>({...d,checklists:updC}));saveData("checklists",updC);
     if(issueItems.length>0){
-      const hasMalo=issueItems.some(it=>it.status==="malo");
-      const issueList=issueItems.map(it=>`• [${it.status==="malo"?"MALO":"REGULAR"}] ${it.sectionLabel}: ${it.name}${it.note?` — ${it.note}`:""}`).join("\n");
-      const sol={
+      const now=new Date().toISOString();
+      const header=`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}`;
+      const newSolicitudes=issueItems.map(it=>({
         id:uid(),
-        title:`Checklist Pre-op — ${eq?.code} — ${issueItems.length} obs.`,
+        title:`[${it.status==="malo"?"MALO":"REGULAR"}] ${it.name} — ${eq?.code}`,
         equipId:setup.equipId,
-        subsistema:"general",
-        componente:issueItems.length===1?issueItems[0].name:"Múltiples sistemas",
-        description:`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}\n\nObservaciones detectadas:\n${issueList}`,
-        priority:hasMalo?"alta":"media",
+        subsistema:"",
+        componente:it.name,
+        description:`${header}\n\nSección: ${it.sectionLabel}\nEstado: ${it.status==="malo"?"MALO ✗":"REGULAR ~"}${it.note?`\nNota del operador: ${it.note}`:""}`,
+        priority:it.status==="malo"?"alta":"media",
         status:"pendiente",
         requestedBy:user.id,
-        requestedAt:new Date().toISOString(),
+        requestedAt:now,
         source:"checklist",
-        checklistId:newCL.id
-      };
-      const updR=[...(requests||[]),sol];
+        checklistId:newCL.id,
+        checklistItemId:it.id
+      }));
+      const updR=[...(requests||[]),...newSolicitudes];
       setData(d=>({...d,requests:updR}));saveData("requests",updR);
     }
     setEditing(false);setStep(1);setItems([]);
     setSetup({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
-    alert(`✅ Checklist guardado${issueItems.length>0?` · ${issueItems.length} obs. enviadas a Operaciones.`:". Sin observaciones."}`);
+    alert(`✅ Checklist guardado${issueItems.length>0?` · ${issueItems.length} solicitud(es) independientes enviadas a Operaciones.`:". Sin observaciones."}`);
   };
 
-  const mine=user.role==="supervisor"?allCL:[...allCL].filter(c=>c.operatorId===user.id);
+  const mine=(user.role==="supervisor"||user.role==="operaciones")?allCL:[...allCL].filter(c=>c.operatorId===user.id);
 
   if(!editing){
     return(
