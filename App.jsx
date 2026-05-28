@@ -15,6 +15,8 @@ const SEED_USERS = [
   { id:"u2", name:"José Muñoz",        role:"supervisor",  email:"jmunoz@navimag.cl",  password:"Navimag2026", avatar:"JM" },
   { id:"u3", name:"Felipe Stein",      role:"operaciones", email:"fstein@navimag.cl",  password:"Navimag2026", avatar:"FS" },
   { id:"u4", name:"Jorge Soto",        role:"operaciones", email:"jsoto@navimag.cl",   password:"Navimag2026", avatar:"JS" },
+  { id:"u5", name:"Operador 1",        role:"operador",    email:"op1@navimag.cl",     password:"Navimag2026", avatar:"O1" },
+  { id:"u6", name:"Operador 2",        role:"operador",    email:"op2@navimag.cl",     password:"Navimag2026", avatar:"O2" },
 ];
 
 // ─── EQUIPOS NAVIMAG ──────────────────────────────────────────────────────────
@@ -43,10 +45,82 @@ const SEED_EQUIPMENT = [
   { id:"gru41",  code:"GRU-41",  name:"Grúa 41",     type:"Grúa Portuaria",   location:"Muelle",         criticality:"A", status:"operativo", lastMaint:"", nextMaint:"", hours:0 },
 ];
 
-const SEED_PM_PLANS    = [];
-const SEED_REQUESTS    = [];
-const SEED_WORK_ORDERS = [];
-const SEED_DEVIATIONS  = [];
+const SEED_PM_PLANS       = [];
+const SEED_REQUESTS       = [];
+const SEED_WORK_ORDERS    = [];
+const SEED_DEVIATIONS     = [];
+const SEED_TASK_TEMPLATES = [];
+const SEED_CHECKLISTS     = [];
+
+// ─── CHECKLIST TEMPLATES ─────────────────────────────────────────────────────
+const CHECKLIST_TEMPLATES = {
+  tracto:{
+    label:"Tracto Camión",
+    equipTypes:["Tracto Terminal","Tracto Portuario"],
+    sections:[
+      {label:"General", items:[
+        {id:"tc_fugas",       name:"Fugas de aceite, líquido o aire",      method:"Visualmente / escuchando bajo el vehículo",    icon:"💧"},
+      ]},
+      {label:"Motor", items:[
+        {id:"tc_aceite_m",    name:"Nivel de aceite motor",                method:"Varilla de medición",                          icon:"🛢️"},
+        {id:"tc_refrig",      name:"Nivel de refrigerante",                method:"Visualmente — depósito / indicador panel CAN", icon:"🌡️"},
+      ]},
+      {label:"Frenos", items:[
+        {id:"tc_frenos",      name:"Frenos — funcionamiento",              method:"Prueba después del desplazamiento",            icon:"🛑"},
+      ]},
+      {label:"Suspensión y Neumáticos", items:[
+        {id:"tc_acopl",       name:"Acoplamiento de la rueda",             method:"Visualmente",                                  icon:"🔩"},
+        {id:"tc_neum_del",    name:"Neumático delantero",                  method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_tra",    name:"Neumático trasero",                    method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_ti",     name:"Neumático trasero izquierdo",          method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_td",     name:"Neumático trasero derecho",            method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+      ]},
+      {label:"Cabina y Luces", items:[
+        {id:"tc_luces_f",     name:"Luces faeneras y señalización",        method:"Visualmente / escuchando zumbadores",          icon:"🔦"},
+        {id:"tc_controles",   name:"Controles e indicadores luminosos",    method:"Visualmente — antes y después de arrancar",    icon:"🎛️"},
+        {id:"tc_clavijas",    name:"Clavijas de bloqueo de cabina",        method:"Visualmente — abrazaderas traseras",           icon:"🔒"},
+        {id:"tc_luces_izq",   name:"Luces delanteras izquierda",           method:"Visualmente / comprobando funcionamiento",     icon:"💡"},
+        {id:"tc_luces_der",   name:"Luces delanteras derecha",             method:"Visualmente / comprobando funcionamiento",     icon:"💡"},
+        {id:"tc_limpia",      name:"Limpiaparabrisas / nivel líquido",     method:"Visualmente / comprobando nivel depósito",     icon:"🌊"},
+      ]},
+      {label:"Sistema Hidráulico y Carga", items:[
+        {id:"tc_5ta_rueda",   name:"5ª Rueda y brazo de elevación",        method:"Visualmente — lubricación si necesario",       icon:"⚙️"},
+        {id:"tc_aceite_h",    name:"Nivel de aceite hidráulico",           method:"Mirilla de medición",                          icon:"🔧"},
+        {id:"tc_valvula",     name:"Válvula lógica de dirección",          method:"Funcional — girar ruedas y asiento",           icon:"🔄"},
+      ]},
+    ]
+  },
+  grua_horquilla:{
+    label:"Grúa Horquilla",
+    equipTypes:["Montacargas"],
+    sections:[
+      {label:"Motor", items:[
+        {id:"gh_fugas",       name:"Fugas de aceite, líquido o aire",      method:"Visualmente bajo la máquina",                  icon:"💧"},
+        {id:"gh_aceite_m",    name:"Nivel de aceite motor",                method:"Varilla de medición",                          icon:"🛢️"},
+        {id:"gh_refrig",      name:"Nivel de refrigerante",                method:"Visualmente — depósito de expansión",          icon:"🌡️"},
+      ]},
+      {label:"Sistema Hidráulico", items:[
+        {id:"gh_aceite_h",    name:"Nivel de aceite hidráulico",           method:"Mirilla / varilla de medición",                icon:"🔧"},
+        {id:"gh_mangueras",   name:"Cilindros y mangueras hidráulicas",    method:"Visualmente — sin fugas activas",              icon:"🔩"},
+      ]},
+      {label:"Mástil y Horquillas", items:[
+        {id:"gh_mastil",      name:"Estado del mástil",                    method:"Visualmente — fisuras, deformaciones",         icon:"📏"},
+        {id:"gh_horquillas",  name:"Horquillas y porta-horquillas",        method:"Visualmente — deformación, grietas",           icon:"⚙️"},
+        {id:"gh_cadenas",     name:"Cadenas de elevación",                 method:"Visualmente — elongación, corrosión",          icon:"⛓️"},
+      ]},
+      {label:"Ruedas y Frenos", items:[
+        {id:"gh_ruedas",      name:"Estado de ruedas",                     method:"Visualmente — desgaste, cortes, deformación",  icon:"⭕"},
+        {id:"gh_frenos",      name:"Frenos de servicio y parqueo",         method:"Prueba funcional antes de operar",             icon:"🛑"},
+      ]},
+      {label:"Cabina y Controles", items:[
+        {id:"gh_cinturon",    name:"Cinturón de seguridad",                method:"Visualmente / funcional — bloqueo correcto",   icon:"🔒"},
+        {id:"gh_luces",       name:"Luces y señalización acústica",        method:"Visualmente / funcional",                      icon:"🔦"},
+        {id:"gh_controles",   name:"Controles e indicadores panel",        method:"Visualmente — antes y después de arrancar",    icon:"🎛️"},
+        {id:"gh_bateria",     name:"Nivel batería / combustible GLP",      method:"Indicador carga / manómetro presión",          icon:"🔋"},
+      ]},
+    ]
+  },
+};
 
 // ─── COLECCIÓN NUEVA (fuerza reinicio de datos en Firebase) ──────────────────
 const COLL = "mantek_v2";
@@ -95,15 +169,17 @@ const PRI_CLS ={alta:"text-red-700 bg-red-50 border-red-200",media:"text-amber-7
 const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100 border-gray-300"};return<span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${c.cls}`}>{label||c.label}</span>;};
 
 const ROLE_CFG={
-  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
-  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
+  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,       nav:["dashboard","workorders","equipment","plans","indicadores","requests","checklist","deviaciones","reports","users"]},
+  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,       nav:["dashboard","workorders","deviaciones","reports"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","notifications"]},
+  operador:   {label:"Operador",   color:"text-green-300", bg:"bg-green-900/30",  icon:ClipboardList,nav:["dashboard","checklist","notifications"]},
 };
 
 const iCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
 const sCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400";
 const card="bg-white border border-gray-200 rounded-xl shadow-sm";
 const btnPrimary="flex items-center gap-2 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm hover:opacity-90";
+const btnSecondary="flex items-center gap-2 font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm hover:opacity-90 border";
 
 // ─── MODAL ───────────────────────────────────────────────────────────────────
 function Modal({title,onClose,children,wide=false}){
@@ -244,16 +320,17 @@ function LoginPage({users,onLogin}){
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS={
-  dashboard:     {label:"Dashboard",          icon:BarChart2},
-  workorders:    {label:"Órdenes de Trabajo", icon:ClipboardList},
-  equipment:     {label:"Equipos",            icon:Package},
-  plans:         {label:"Plan Preventivo",    icon:Calendar},
-  indicadores:   {label:"Indicadores KPI",    icon:TrendingUp},
-  requests:      {label:"Solicitudes",        icon:Bell},
-  notifications: {label:"Notificaciones",     icon:Bell},
-  deviaciones:   {label:"Rep. Inspección",    icon:FileWarning},
-  reports:       {label:"Informes",           icon:FileText},
-  users:         {label:"Usuarios",           icon:Users},
+  dashboard:     {label:"Dashboard",            icon:BarChart2},
+  workorders:    {label:"Órdenes de Trabajo",   icon:ClipboardList},
+  equipment:     {label:"Equipos",              icon:Package},
+  plans:         {label:"Plan Preventivo",      icon:Calendar},
+  indicadores:   {label:"Indicadores KPI",      icon:TrendingUp},
+  requests:      {label:"Solicitudes",          icon:Bell},
+  notifications: {label:"Notificaciones",       icon:Bell},
+  checklist:     {label:"Checklist Pre-op",     icon:CheckCircle},
+  deviaciones:   {label:"Rep. Inspección",      icon:FileWarning},
+  reports:       {label:"Informes",             icon:FileText},
+  users:         {label:"Usuarios",             icon:Users},
 };
 function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devBadge,online}){
   const cfg=ROLE_CFG[user.role]; const RoleIcon=cfg.icon;
@@ -313,7 +390,15 @@ function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devB
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function Dashboard({user,data,onNav}){
-  const {wos,equip,requests}=data; const role=user.role;
+  const {wos,equip,requests,checklists}=data; const role=user.role;
+  const allCL=checklists||[];
+  const thisMonth=new Date().toISOString().slice(0,7);
+  const monthCL=allCL.filter(c=>c.createdAt?.startsWith(thisMonth));
+  const clByEquip=equip.map(e=>({
+    eq:e,
+    count:monthCL.filter(c=>c.equipId===e.id).length,
+    issues:monthCL.filter(c=>c.equipId===e.id&&c.hasIssues).length
+  })).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
   const pendingWOs=wos.filter(w=>w.status!=="completada"&&w.status!=="cancelada");
   const myWOs=wos.filter(w=>w.assignedTo===user.id&&w.status!=="completada");
   const fallas=equip.filter(e=>e.status==="falla");
@@ -415,13 +500,65 @@ function Dashboard({user,data,onNav}){
           {requests.filter(r=>r.requestedBy===user.id).length===0&&<p className="text-gray-400 text-sm text-center py-6">Sin solicitudes registradas</p>}
         </div>
       </>}
+      {role==="operador"&&<>
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard icon={CheckCircle}   label="Mis Checklists"    value={allCL.filter(c=>c.operatorId===user.id&&c.createdAt?.startsWith(thisMonth)).length} sub="este mes" color="emerald"/>
+          <StatCard icon={AlertTriangle} label="Obs. Reportadas"   value={allCL.filter(c=>c.operatorId===user.id&&c.hasIssues&&c.createdAt?.startsWith(thisMonth)).length} sub="este mes" color="amber"/>
+        </div>
+        <div className={`${card} p-5`}>
+          <h2 className="font-semibold text-sm mb-4" style={{color:NV.navy}}>Mis Checklists Recientes</h2>
+          {allCL.filter(c=>c.operatorId===user.id).slice(-5).reverse().map(c=>{
+            const eq=equip.find(e=>e.id===c.equipId);
+            return<div key={c.id} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.hasIssues?"bg-amber-400":"bg-emerald-500"}`}/>
+              <span className="text-gray-700 text-xs flex-1">{eq?.code} — {CHECKLIST_TEMPLATES[c.type]?.label||c.type}</span>
+              <span className="text-gray-400 text-xs">{c.hasIssues?`${c.issueCount} obs.`:"OK"}</span>
+            </div>;
+          })}
+          {allCL.filter(c=>c.operatorId===user.id).length===0&&<p className="text-gray-400 text-sm text-center py-6">No has completado ningún checklist</p>}
+        </div>
+      </>}
+
+      {/* Checklist stats widget — visible to all roles */}
+      {monthCL.length>0&&(
+        <div className={`${card} p-5`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-sm flex items-center gap-2" style={{color:NV.navy}}><CheckCircle size={15}/>Checklists del Mes</h2>
+            <div className="flex gap-4 text-xs">
+              <span className="text-gray-500">{monthCL.length} total</span>
+              <span className="text-emerald-600 font-medium">{monthCL.filter(c=>!c.hasIssues).length} sin obs.</span>
+              <span className="text-amber-600 font-medium">{monthCL.filter(c=>c.hasIssues).length} con obs.</span>
+            </div>
+          </div>
+          {clByEquip.length===0?<p className="text-gray-400 text-xs text-center py-2">Sin datos este mes</p>:(
+            <table className="w-full text-xs">
+              <thead><tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left py-1.5 font-medium">Equipo</th>
+                <th className="text-right py-1.5 font-medium">Checklists</th>
+                <th className="text-right py-1.5 font-medium">Con Obs.</th>
+                <th className="text-right py-1.5 font-medium">Estado</th>
+              </tr></thead>
+              <tbody>{clByEquip.slice(0,8).map(({eq,count,issues})=>(
+                <tr key={eq.id} className="border-b border-gray-50 last:border-0">
+                  <td className="py-1.5"><span className="font-mono font-semibold" style={{color:NV.blue}}>{eq.code}</span> <span className="text-gray-500">{eq.name}</span></td>
+                  <td className="py-1.5 text-right text-gray-700 font-semibold">{count}</td>
+                  <td className="py-1.5 text-right"><span className={issues>0?"text-amber-600 font-semibold":"text-gray-400"}>{issues}</span></td>
+                  <td className="py-1.5 text-right">
+                    <div className="flex justify-end gap-0.5">{Array.from({length:count},(_, i)=><span key={i} className={`inline-block w-2 h-2 rounded-sm ${i<issues?"bg-amber-400":"bg-emerald-400"}`}/>)}</div>
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── WORK ORDERS ─────────────────────────────────────────────────────────────
 function WorkOrders({user,data,setData}){
-  const {wos,equip,users,requests}=data;
+  const {wos,equip,users,requests,plans}=data;
   const [filter,setFilter]=useState("all"); const [search,setSearch]=useState("");
   const [sel,setSel]=useState(null); const [showRep,setShowRep]=useState(false);
   const [rep,setRep]=useState({actualHours:"",observations:"",status:"completada"});
@@ -439,6 +576,11 @@ function WorkOrders({user,data,setData}){
     if(rep.status==="completada"&&sel.reqId){
       const updR=requests.map(r=>r.id===sel.reqId?{...r,status:"completada"}:r);
       setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    if(rep.status==="completada"&&sel.planId){
+      const eqH=equip.find(e=>e.id===sel.equipId)?.hours||0;
+      const updP=plans.map(p=>p.id===sel.planId?{...p,lastHorometro:eqH,horometroTarget:eqH+(p.frequency||0)}:p);
+      setData(d=>({...d,plans:updP}));saveData("plans",updP);
     }
     setShowRep(false);setRep({actualHours:"",observations:"",status:"completada"});
   };
@@ -690,142 +832,295 @@ function Equipment({user,data,setData}){
 }
 
 // ─── PLANS ───────────────────────────────────────────────────────────────────
-const EMPTY_PLAN={name:"",frequency:"",unit:"días",nextDate:"",estimatedHours:"",technician:"",tasks:""};
+const EMPTY_TPL={name:"",frequency:"",estimatedHours:"",technician:"",tasks:""};
+const EMPTY_PLAN_FORM={equipId:"",name:"",frequency:"",lastHorometro:"",estimatedHours:"",technician:"",tasks:""};
 function Plans({user,data,setData}){
-  const {plans,equip,users,wos}=data;
-  const [showForm,setShowForm]=useState(false); const [showMasivo,setShowMasivo]=useState(false);
-  const [form,setForm]=useState({equipId:"",...EMPTY_PLAN});
-  const [mForm,setMForm]=useState(EMPTY_PLAN); const [selEquips,setSelEquips]=useState([]); const [mName,setMName]=useState("");
+  const {plans,equip,users,wos,taskTemplates}=data;
+  const [tab,setTab]=useState("planes");
+  const [showTplForm,setShowTplForm]=useState(false);
+  const [showAssign,setShowAssign]=useState(null);
+  const [showPlanForm,setShowPlanForm]=useState(false);
+  const [tplForm,setTplForm]=useState(EMPTY_TPL);
+  const [planForm,setPlanForm]=useState(EMPTY_PLAN_FORM);
+  const [selEquipsData,setSelEquipsData]=useState({});
+
   const genOT=(plan,allWOs)=>{
     const eq=equip.find(e=>e.id===plan.equipId);if(!eq)return null;
     const priority=eq.criticality==="A"?"alta":eq.criticality==="B"?"media":"baja";
-    return {id:uid(),code:nextOTCode(allWOs),type:"preventivo",equipId:plan.equipId,planId:plan.id,title:plan.name,priority,status:"asignada",assignedTo:plan.technician,createdAt:new Date().toISOString(),scheduledDate:plan.nextDate,estimatedHours:parseFloat(plan.estimatedHours)||0,actualHours:null,description:`OT automática. Tareas: ${Array.isArray(plan.tasks)?plan.tasks.join(", "):plan.tasks}`,observations:"",parts:[],source:"plan"};
+    return {id:uid(),code:nextOTCode(allWOs),type:"preventivo",equipId:plan.equipId,planId:plan.id,title:plan.name,priority,status:"asignada",assignedTo:plan.technician,createdAt:new Date().toISOString(),scheduledDate:"",estimatedHours:parseFloat(plan.estimatedHours)||0,actualHours:null,description:`OT automática. Tareas: ${Array.isArray(plan.tasks)?plan.tasks.join(", "):plan.tasks}`,observations:"",parts:[],source:"plan"};
   };
+
+  const saveTpl=()=>{
+    if(!tplForm.name||!tplForm.frequency)return;
+    const nt={id:uid(),...tplForm,frequency:parseInt(tplForm.frequency)||0,estimatedHours:parseFloat(tplForm.estimatedHours)||0,tasks:tplForm.tasks.split("\n").filter(Boolean)};
+    const upd=[...(taskTemplates||[]),nt];
+    setData(d=>({...d,taskTemplates:upd}));saveData("taskTemplates",upd);
+    setShowTplForm(false);setTplForm(EMPTY_TPL);
+  };
+
+  const deleteTpl=(id)=>{
+    const upd=(taskTemplates||[]).filter(t=>t.id!==id);
+    setData(d=>({...d,taskTemplates:upd}));saveData("taskTemplates",upd);
+  };
+
+  const assignTpl=()=>{
+    const ids=Object.keys(selEquipsData);
+    if(ids.length===0||!showAssign)return;
+    let newPlans=[...plans];
+    ids.forEach(eqId=>{
+      const eq=equip.find(e=>e.id===eqId);if(!eq)return;
+      const lastHoro=parseFloat(selEquipsData[eqId].lastHorometro)||0;
+      const np={id:uid(),templateId:showAssign.id,equipId:eqId,name:showAssign.name,frequency:showAssign.frequency,lastHorometro:lastHoro,horometroTarget:lastHoro+showAssign.frequency,estimatedHours:showAssign.estimatedHours,technician:showAssign.technician,tasks:showAssign.tasks};
+      newPlans.push(np);
+    });
+    setData(d=>({...d,plans:newPlans}));saveData("plans",newPlans);
+    setShowAssign(null);setSelEquipsData({});
+    alert(`✅ ${ids.length} planes creados`);
+  };
+
   const addPlan=()=>{
-    if(!form.equipId||!form.name)return;
-    const np={id:uid(),...form,frequency:parseInt(form.frequency)||0,estimatedHours:parseFloat(form.estimatedHours)||0,tasks:form.tasks.split("\n").filter(Boolean)};
+    if(!planForm.equipId||!planForm.name||!planForm.frequency)return;
+    const lastHoro=parseFloat(planForm.lastHorometro)||0;
+    const freq=parseInt(planForm.frequency)||0;
+    const np={id:uid(),equipId:planForm.equipId,name:planForm.name,frequency:freq,lastHorometro:lastHoro,horometroTarget:lastHoro+freq,estimatedHours:parseFloat(planForm.estimatedHours)||0,technician:planForm.technician,tasks:planForm.tasks.split("\n").filter(Boolean)};
     const updP=[...plans,np];const newOT=genOT(np,wos);const updW=newOT?[...wos,newOT]:wos;
     setData(d=>({...d,plans:updP,wos:updW}));saveData("plans",updP);saveData("workOrders",updW);
-    setShowForm(false);if(newOT)alert(`✅ OT ${newOT.code} generada`);
+    setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);if(newOT)alert(`✅ OT ${newOT.code} generada`);
   };
-  const addMasivo=()=>{
-    if(selEquips.length===0||!mName)return;
-    let allWOs=[...wos];let newPlans=[...plans];
-    selEquips.forEach(eqId=>{const eq=equip.find(e=>e.id===eqId);if(!eq)return;
-      const planName=mName.replace("{equipo}",eq.name).replace("{codigo}",eq.code);
-      const np={id:uid(),equipId:eqId,name:planName,frequency:parseInt(mForm.frequency)||0,unit:mForm.unit,nextDate:mForm.nextDate,tasks:mForm.tasks.split("\n").filter(Boolean),estimatedHours:parseFloat(mForm.estimatedHours)||0,technician:mForm.technician};
-      newPlans.push(np);const newOT=genOT(np,allWOs);if(newOT)allWOs.push(newOT);
-    });
-    setData(d=>({...d,plans:newPlans,wos:allWOs}));saveData("plans",newPlans);saveData("workOrders",allWOs);
-    setShowMasivo(false);setSelEquips([]);setMForm(EMPTY_PLAN);setMName("");
-    alert(`✅ ${selEquips.length} planes creados`);
-  };
+
   const generateOT=plan=>{const newOT=genOT(plan,wos);if(!newOT)return;const updW=[...wos,newOT];setData(d=>({...d,wos:updW}));saveData("workOrders",updW);alert(`✅ OT ${newOT.code} — Prioridad ${newOT.priority.toUpperCase()}`);};
+
+  const deletePlan=(id)=>{
+    const upd=plans.filter(p=>p.id!==id);
+    setData(d=>({...d,plans:upd}));saveData("plans",upd);
+  };
+
+  const tpls=taskTemplates||[];
+
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
-        <div><h1 className="text-gray-900 font-bold text-xl">Plan de Mantenimiento Preventivo</h1><p className="text-gray-500 text-sm">Programación automática de OT</p></div>
+        <div><h1 className="text-gray-900 font-bold text-xl">Plan de Mantenimiento Preventivo</h1><p className="text-gray-500 text-sm">Programación por horómetro</p></div>
         {user.role==="supervisor"&&<div className="flex gap-2">
-          <button onClick={()=>setShowMasivo(true)} className={btnPrimary} style={{background:`linear-gradient(90deg,${NV.navy},${NV.blue})`}}><Layers size={15}/>Plan Masivo</button>
-          <button onClick={()=>setShowForm(true)}   className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Plan</button>
+          <button onClick={()=>setShowTplForm(true)} className={btnSecondary} style={{borderColor:NV.blue,color:NV.blue,background:"white"}}><ClipboardList size={15}/>Nueva Plantilla</button>
+          <button onClick={()=>setShowPlanForm(true)} className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Plan</button>
         </div>}
       </div>
-      {plans.length===0&&<div className="text-center py-16 text-gray-400"><Calendar size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea un plan individual o aplica un plan masivo a múltiples equipos</p></div>}
-      <div className="space-y-4">
-        {plans.map(p=>{
-          const eq=equip.find(e=>e.id===p.equipId);const tech=users.find(u=>u.id===p.technician);
-          const linked=wos.filter(w=>w.planId===p.id);const daysLeft=Math.ceil((new Date(p.nextDate)-new Date())/86400000);
-          return(
-            <div key={p.id} className={`${card} p-5 hover:shadow-md transition`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
-                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${daysLeft<=0?"text-red-700 bg-red-50 border-red-200":daysLeft<=7?"text-red-700 bg-red-50 border-red-200":daysLeft<=30?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
-                      {daysLeft<=0?"VENCIDO":`En ${daysLeft}d`}
-                    </span>
-                  </div>
-                  <p className="text-gray-800 font-semibold text-sm mb-2">{p.name}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-400 flex-wrap">
-                    <span className="flex items-center gap-1"><RefreshCw size={10}/>Cada {p.frequency} {p.unit}</span>
-                    <span className="flex items-center gap-1"><Calendar size={10}/>Prox: {fmt(p.nextDate)}</span>
-                    <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
-                    {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
-                  </div>
-                  {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
-                </div>
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className="text-gray-400 text-xs">{linked.length} OT</span>
-                  {user.role==="supervisor"&&<button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 bg-gray-100 p-1 rounded-lg w-fit">
+        {[["planes","Planes Activos"],["plantillas","Plantillas"]].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${tab===t?"bg-white text-gray-900 shadow-sm":"text-gray-500 hover:text-gray-700"}`}>{l}</button>
+        ))}
       </div>
-      {showForm&&(
-        <Modal title="Nuevo Plan de Mantenimiento" onClose={()=>setShowForm(false)}>
-          <div className="space-y-3">
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label><select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL PLAN</label><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} className={iCls}/></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA</label><input type="number" value={form.frequency} onChange={e=>setForm(f=>({...f,frequency:e.target.value}))} className={iCls}/></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">UNIDAD</label><select value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))} className={sCls}><option value="días">Días</option><option value="horas">Horas</option><option value="semanas">Semanas</option></select></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRÓXIMA FECHA</label><input type="date" value={form.nextDate} onChange={e=>setForm(f=>({...f,nextDate:e.target.value}))} className={iCls}/></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={form.estimatedHours} onChange={e=>setForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
-            </div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO ASIGNADO</label><select value={form.technician} onChange={e=>setForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={form.tasks} onChange={e=>setForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+
+      {tab==="planes"&&(
+        <>
+          {plans.length===0&&<div className="text-center py-16 text-gray-400"><Gauge size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea una plantilla y asígnala a equipos, o crea un plan individual</p></div>}
+          <div className="space-y-4">
+            {plans.map(p=>{
+              const eq=equip.find(e=>e.id===p.equipId);const tech=users.find(u=>u.id===p.technician);
+              const linked=wos.filter(w=>w.planId===p.id);
+              const curH=eq?.hours||0;
+              const range=p.horometroTarget-p.lastHorometro;
+              const pct=range>0?Math.min(100,Math.max(0,((curH-p.lastHorometro)/range)*100)):100;
+              const hl=p.horometroTarget-curH;
+              const overdue=curH>=p.horometroTarget;
+              const soon=!overdue&&hl<=(p.frequency||0)*0.1;
+              return(
+                <div key={p.id} className={`${card} p-5 hover:shadow-md transition`}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
+                        <span className="text-gray-600 text-xs font-medium">{eq?.name}</span>
+                        <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${overdue?"text-red-700 bg-red-50 border-red-200":soon?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                          {overdue?"VENCIDO":soon?`PRÓXIMO (+${Math.round(hl)}h)`:`En ${Math.round(hl)}h`}
+                        </span>
+                      </div>
+                      <p className="text-gray-800 font-semibold text-sm mb-3">{p.name}</p>
+                      <div className="mb-3">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{p.lastHorometro.toLocaleString()}h</span>
+                          <span className="font-semibold" style={{color:overdue?"#b91c1c":NV.navy}}>Actual: {curH.toLocaleString()}h</span>
+                          <span>Meta: {p.horometroTarget.toLocaleString()}h</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${overdue?"bg-red-500":soon?"bg-amber-400":"bg-emerald-500"}`} style={{width:`${pct}%`}}/>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Frecuencia: cada {p.frequency}h · {linked.length} OT historial</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                        <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
+                        {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
+                      </div>
+                      {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {user.role==="supervisor"&&<>
+                        <button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>
+                        <button onClick={()=>deletePlan(p.id)} className="text-xs text-gray-300 hover:text-red-500 transition p-1"><Trash2 size={13}/></button>
+                      </>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <ModalActions onSave={addPlan} onCancel={()=>setShowForm(false)} label="Guardar y Generar OT"/>
+        </>
+      )}
+
+      {tab==="plantillas"&&(
+        <>
+          {tpls.length===0&&<div className="text-center py-16 text-gray-400"><ClipboardList size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin plantillas</p><p className="text-sm mt-1">Crea plantillas reutilizables y asígnalas a múltiples equipos con un clic</p></div>}
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {tpls.map(t=>{
+              const tech=users.find(u=>u.id===t.technician);
+              const usedCount=plans.filter(p=>p.templateId===t.id).length;
+              return(
+                <div key={t.id} className={`${card} p-4 hover:shadow-md transition`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <p className="text-gray-800 font-semibold text-sm">{t.name}</p>
+                      <p className="text-gray-400 text-xs mt-0.5">Cada {t.frequency}h · {t.estimatedHours}h est.</p>
+                    </div>
+                    {user.role==="supervisor"&&<div className="flex gap-1 flex-shrink-0">
+                      <button onClick={()=>{setSelEquipsData({});setShowAssign(t);}} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white transition hover:opacity-90 flex items-center gap-1" style={{background:NV.blue}}><Layers size={11}/>Asignar</button>
+                      <button onClick={()=>deleteTpl(t.id)} className="text-gray-300 hover:text-red-500 p-1 transition"><Trash2 size={13}/></button>
+                    </div>}
+                  </div>
+                  {tech&&<p className="text-xs text-gray-400 mb-2 flex items-center gap-1"><Users size={10}/>{tech.name}</p>}
+                  {Array.isArray(t.tasks)&&t.tasks.length>0&&<div className="flex flex-wrap gap-1 mb-3">{t.tasks.map((task,i)=><span key={i} className="text-xs border px-1.5 py-0.5 rounded" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{task}</span>)}</div>}
+                  <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">{usedCount} equipo{usedCount!==1?"s":""} asignado{usedCount!==1?"s":""}</p>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Nueva Plantilla */}
+      {showTplForm&&(
+        <Modal title="Nueva Plantilla de Tarea" onClose={()=>{setShowTplForm(false);setTplForm(EMPTY_TPL);}}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE</label><input value={tplForm.name} onChange={e=>setTplForm(f=>({...f,name:e.target.value}))} className={iCls} placeholder="ej: Servicio 250h"/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA (horas)</label><input type="number" value={tplForm.frequency} onChange={e=>setTplForm(f=>({...f,frequency:e.target.value}))} className={iCls} placeholder="250"/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={tplForm.estimatedHours} onChange={e=>setTplForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls} placeholder="4"/></div>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO ASIGNADO</label><select value={tplForm.technician} onChange={e=>setTplForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={tplForm.tasks} onChange={e=>setTplForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+          </div>
+          <ModalActions onSave={saveTpl} onCancel={()=>{setShowTplForm(false);setTplForm(EMPTY_TPL);}} label="Guardar Plantilla"/>
         </Modal>
       )}
-      {showMasivo&&(
-        <Modal title="Plan Masivo — Múltiples equipos" onClose={()=>setShowMasivo(false)} wide={true}>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-blue-700 text-xs flex items-start gap-2">
+
+      {/* Asignar Plantilla a Equipos */}
+      {showAssign&&(
+        <Modal title={`Asignar: ${showAssign.name}`} onClose={()=>{setShowAssign(null);setSelEquipsData({});}} wide={true}>
+          <div className="rounded-lg p-3 mb-4 text-xs flex items-start gap-2" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
             <Info size={14} className="flex-shrink-0 mt-0.5"/>
-            <span>Usa <strong>{"{equipo}"}</strong> o <strong>{"{codigo}"}</strong> en el nombre para personalizarlo por equipo.</span>
+            <span>Frecuencia: <strong>cada {showAssign.frequency}h</strong>. Ingresa el horómetro de la última intervención por equipo. El próximo se calculará automáticamente.</span>
           </div>
           <div className="grid grid-cols-2 gap-5">
             <div>
-              <p className="text-gray-700 font-semibold text-sm mb-2">Equipos <span style={{color:NV.blue}}>({selEquips.length})</span></p>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                {equip.map(e=>{const checked=selEquips.includes(e.id);return(
-                  <label key={e.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition ${checked?"border-blue-300":"bg-gray-50 border-gray-200 hover:border-gray-300"}`} style={checked?{background:NV.light}:{}}>
-                    <input type="checkbox" checked={checked} onChange={()=>setSelEquips(s=>s.includes(e.id)?s.filter(x=>x!==e.id):[...s,e.id])} className="w-4 h-4" style={{accentColor:NV.blue}}/>
-                    <div><p className="text-gray-800 text-xs font-semibold">{e.name}</p><p className="text-gray-400 text-xs">{e.code}</p></div>
-                  </label>
-                );})}
+              <p className="text-gray-700 font-semibold text-sm mb-2">Equipos <span style={{color:NV.blue}}>({Object.keys(selEquipsData).length} sel.)</span></p>
+              <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                {equip.map(e=>{
+                  const checked=!!selEquipsData[e.id];
+                  return(
+                    <div key={e.id} className={`rounded-lg border transition ${checked?"border-blue-300":"bg-gray-50 border-gray-200 hover:border-gray-300"}`} style={checked?{background:NV.light}:{}}>
+                      <label className="flex items-center gap-2.5 p-2.5 cursor-pointer" onClick={()=>{
+                        if(checked){const n={...selEquipsData};delete n[e.id];setSelEquipsData(n);}
+                        else setSelEquipsData(s=>({...s,[e.id]:{lastHorometro:String(e.hours)}}));
+                      }}>
+                        <input type="checkbox" checked={checked} readOnly className="w-4 h-4 flex-shrink-0" style={{accentColor:NV.blue}}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 text-xs font-semibold">{e.name}</p>
+                          <p className="text-gray-400 text-xs">{e.code} · {e.hours.toLocaleString()}h actuales</p>
+                        </div>
+                      </label>
+                      {checked&&(
+                        <div className="px-2.5 pb-2.5 flex items-end gap-2">
+                          <div className="flex-1">
+                            <p className="text-gray-400 text-xs mb-0.5">Último horómetro de intervención</p>
+                            <input type="number" value={selEquipsData[e.id].lastHorometro} onChange={ev=>setSelEquipsData(s=>({...s,[e.id]:{lastHorometro:ev.target.value}}))} className={iCls+" py-1 text-xs"} onClick={ev=>ev.stopPropagation()}/>
+                          </div>
+                          <div className="text-right flex-shrink-0 pb-1">
+                            <p className="text-gray-400 text-xs">Próximo</p>
+                            <p className="font-bold text-sm" style={{color:NV.blue}}>{((parseFloat(selEquipsData[e.id].lastHorometro)||0)+showAssign.frequency).toLocaleString()}h</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex gap-2 mt-2">
-                <button onClick={()=>setSelEquips(equip.map(e=>e.id))} className="flex-1 text-xs hover:underline py-1" style={{color:NV.blue}}>Todos</button>
-                <button onClick={()=>setSelEquips([])} className="flex-1 text-xs text-gray-400 hover:underline py-1">Limpiar</button>
+                <button onClick={()=>{const n={};equip.forEach(e=>{n[e.id]={lastHorometro:String(e.hours)}});setSelEquipsData(n);}} className="flex-1 text-xs hover:underline py-1" style={{color:NV.blue}}>Todos</button>
+                <button onClick={()=>setSelEquipsData({})} className="flex-1 text-xs text-gray-400 hover:underline py-1">Limpiar</button>
               </div>
             </div>
-            <div className="space-y-3">
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE</label><input value={mName} onChange={e=>setMName(e.target.value)} className={iCls} placeholder="Servicio 250h - {equipo}"/></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA</label><input type="number" value={mForm.frequency} onChange={e=>setMForm(f=>({...f,frequency:e.target.value}))} className={iCls}/></div>
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">UNIDAD</label><select value={mForm.unit} onChange={e=>setMForm(f=>({...f,unit:e.target.value}))} className={sCls}><option value="días">Días</option><option value="horas">Horas</option><option value="semanas">Semanas</option></select></div>
+            <div>
+              <p className="text-gray-700 font-semibold text-sm mb-2">Vista previa</p>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {Object.keys(selEquipsData).length===0
+                  ?<p className="text-gray-400 text-xs py-4 text-center">Selecciona equipos a la izquierda</p>
+                  :Object.entries(selEquipsData).map(([eqId,d])=>{
+                    const eq=equip.find(e=>e.id===eqId);if(!eq)return null;
+                    const lastH=parseFloat(d.lastHorometro)||0;
+                    const target=lastH+showAssign.frequency;
+                    const hl=target-eq.hours;
+                    const overdue=eq.hours>=target;
+                    return(
+                      <div key={eqId} className="p-3 rounded-lg border" style={{background:NV.light,borderColor:"#BFD9F2"}}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-xs font-semibold" style={{color:NV.navy}}>{eq.name} <span className="font-normal text-gray-400">({eq.code})</span></p>
+                            <p className="text-xs text-gray-500 mt-0.5">{lastH.toLocaleString()}h → <strong>{target.toLocaleString()}h</strong></p>
+                          </div>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold flex-shrink-0 ${overdue?"text-red-700 bg-red-100":hl<=(showAssign.frequency*0.1)?"text-amber-700 bg-amber-100":"text-emerald-700 bg-emerald-100"}`}>
+                            {overdue?"VENCIDO":`+${Math.round(hl)}h`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRÓXIMA FECHA</label><input type="date" value={mForm.nextDate} onChange={e=>setMForm(f=>({...f,nextDate:e.target.value}))} className={iCls}/></div>
-                <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={mForm.estimatedHours} onChange={e=>setMForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
-              </div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO</label><select value={mForm.technician} onChange={e=>setMForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
-              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={mForm.tasks} onChange={e=>setMForm(f=>({...f,tasks:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder={"Cambio aceite\nFiltros\nRevisión general"}/></div>
             </div>
           </div>
-          {selEquips.length>0&&mName&&(
-            <div className="mt-4 rounded-lg p-3 text-xs border" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>
-              <p className="font-semibold mb-1">Vista previa:</p>
-              {selEquips.slice(0,3).map(id=>{const eq=equip.find(e=>e.id===id);return<p key={id}>• {mName.replace("{equipo}",eq?.name||"").replace("{codigo}",eq?.code||"")}</p>;})}
-              {selEquips.length>3&&<p className="opacity-60">... y {selEquips.length-3} más</p>}
+          <ModalActions onSave={assignTpl} onCancel={()=>{setShowAssign(null);setSelEquipsData({});}} label={`Crear ${Object.keys(selEquipsData).length} Planes`}/>
+        </Modal>
+      )}
+
+      {/* Nuevo Plan Individual */}
+      {showPlanForm&&(
+        <Modal title="Nuevo Plan Individual" onClose={()=>{setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);}}>
+          <div className="space-y-3">
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+              <select value={planForm.equipId} onChange={e=>{const eq=equip.find(q=>q.id===e.target.value);setPlanForm(f=>({...f,equipId:e.target.value,lastHorometro:eq?String(eq.hours):""}));}} className={sCls}>
+                <option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code}) — {e.hours.toLocaleString()}h</option>)}
+              </select>
             </div>
-          )}
-          <ModalActions onSave={addMasivo} onCancel={()=>setShowMasivo(false)} label={`Crear ${selEquips.length} Planes`}/>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL PLAN</label><input value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} className={iCls} placeholder="ej: Servicio 250h"/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">FRECUENCIA (horas)</label><input type="number" value={planForm.frequency} onChange={e=>setPlanForm(f=>({...f,frequency:e.target.value}))} className={iCls} placeholder="250"/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">ÚLTIMO HORÓMETRO</label><input type="number" value={planForm.lastHorometro} onChange={e=>setPlanForm(f=>({...f,lastHorometro:e.target.value}))} className={iCls} placeholder="ej: 1000"/></div>
+            </div>
+            {planForm.frequency&&planForm.lastHorometro&&(
+              <div className="rounded-lg p-2.5 text-xs flex items-center gap-2" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
+                <Gauge size={13}/>
+                <span>Próxima intervención: <strong>{(parseFloat(planForm.lastHorometro)+parseInt(planForm.frequency)).toLocaleString()}h</strong></span>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">HRS ESTIMADAS</label><input type="number" value={planForm.estimatedHours} onChange={e=>setPlanForm(f=>({...f,estimatedHours:e.target.value}))} className={iCls}/></div>
+              <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÉCNICO</label><select value={planForm.technician} onChange={e=>setPlanForm(f=>({...f,technician:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{users.filter(u=>u.role==="mecanico").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">TAREAS (una por línea)</label><textarea value={planForm.tasks} onChange={e=>setPlanForm(f=>({...f,tasks:e.target.value}))} rows={4} className={iCls+" resize-none"} placeholder={"Cambio aceite motor\nFiltro hidráulico\nRevisión frenos"}/></div>
+          </div>
+          <ModalActions onSave={addPlan} onCancel={()=>{setShowPlanForm(false);setPlanForm(EMPTY_PLAN_FORM);}} label="Guardar Plan"/>
         </Modal>
       )}
     </div>
@@ -888,11 +1183,11 @@ function Indicadores({data}){
 function Requests({user,data,setData}){
   const {requests,equip,users,wos}=data;
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media"});
+  const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
   const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
-  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media"});};
-  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
+  const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});};
+  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const isCL=req.source==="checklist";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isCL?"Checklist":isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   return(
@@ -902,50 +1197,117 @@ function Requests({user,data,setData}){
         {canCreate&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nueva Solicitud</button>}
       </div>
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
-      <div className="space-y-3">
-        {visible.map(r=>{const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);return(
-          <div key={r.id} className={`bg-white border rounded-xl p-5 shadow-sm ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300 bg-emerald-50/30":"border-gray-200"}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <Badge s={r.status}/><span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
+      <div className="space-y-4">
+        {visible.map(r=>{
+          const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);
+          const SUBSIST={electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"};
+          const DEV_TYPE={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía Detectada",desgaste:"Desgaste / Deterioro",otro:"Otro"};
+          return(
+            <div key={r.id} className={`bg-white border rounded-xl shadow-sm overflow-hidden ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300":"border-gray-200"}`}>
+              {/* ── Header ── */}
+              <div className={`px-5 py-3 border-b flex items-center justify-between gap-3 flex-wrap ${r.status==="completada"?"bg-emerald-50/60 border-emerald-100":"bg-gray-50/60 border-gray-100"}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge s={r.status}/>
+                  <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
                   {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
+                  {r.source==="checklist"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-green-700 bg-green-50 border-green-200">Checklist Pre-op</span>}
+                  {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE[r.type]||r.type}</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
-                <p className="text-gray-800 font-semibold text-sm mb-1">{r.title}</p>
-                <p className="text-gray-500 text-xs mb-2">{r.description}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap"><span>{eq?.name||"—"}</span><span>·</span><span>{reqBy?.name||"—"}</span><span>·</span><span>{fmtDT(r.requestedAt)}</span></div>
-                {linkedOT&&(
-                  <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1">
-                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-semibold mb-1"><CheckCircle size={11}/>OT Generada: {linkedOT.code}</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                      <span><span className="text-gray-400">Estado: </span><Badge s={linkedOT.status}/></span>
-                      {users.find(u=>u.id===linkedOT.assignedTo)&&<span><span className="text-gray-400">Mecánico: </span>{users.find(u=>u.id===linkedOT.assignedTo)?.name}</span>}
-                      {linkedOT.actualHours&&<span><span className="text-gray-400">Horas reales: </span><span className="font-semibold text-emerald-700">{linkedOT.actualHours}h</span></span>}
-                    </div>
-                    {linkedOT.observations&&<p className="text-xs text-gray-600 pt-1 border-t border-emerald-100 mt-1"><span className="text-gray-400 font-medium">Observaciones: </span>{linkedOT.observations}</p>}
+                {(user.role==="supervisor"||(user.role==="operaciones"&&r.source==="checklist"))&&r.status==="pendiente"&&(
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Crear OT</button>
+                    {r.source==="inspeccion"
+                      ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                      :r.source!=="checklist"&&<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                    }
                   </div>
                 )}
               </div>
-              {user.role==="supervisor"&&r.status==="pendiente"&&(
-                <div className="flex gap-2 flex-shrink-0 flex-col">
-                  <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
-                  {r.source==="inspeccion"
-                    ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
-                    :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
-                  }
+
+              {/* ── Body ── */}
+              <div className="p-5 space-y-3">
+                {/* Equipo */}
+                <div className="flex items-center gap-2">
+                  <Package size={13} className="text-gray-400 flex-shrink-0"/>
+                  <span className="text-gray-800 text-sm font-semibold">{eq?.name||"—"}</span>
+                  {eq?.code&&<span className="font-mono text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{eq.code}</span>}
+                  {eq?.location&&<span className="text-gray-400 text-xs">{eq.location}</span>}
                 </div>
-              )}
+
+                {/* Título / Falla */}
+                <div>
+                  <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-0.5">Falla Detectada</p>
+                  <p className="text-gray-900 font-bold text-sm">{r.title}</p>
+                </div>
+
+                {/* Subsistema + Componente */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Subsistema</p>
+                    <p className={`text-sm font-semibold ${r.subsistema?"text-gray-800":"text-gray-400"}`}>{SUBSIST[r.subsistema]||"—"}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Componente en Falla</p>
+                    <p className={`text-sm font-semibold ${r.componente?"text-gray-800":"text-gray-400"}`}>{r.componente||"—"}</p>
+                  </div>
+                </div>
+
+                {/* Descripción */}
+                {r.description&&(
+                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Descripción de la Falla</p>
+                    <p className="text-gray-700 text-sm leading-relaxed">{r.description}</p>
+                  </div>
+                )}
+
+                {/* Meta: quién reportó y cuándo */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-400 pt-1 border-t border-gray-100">
+                  <Users size={11}/>
+                  <span>Reportado por <span className="font-medium text-gray-600">{reqBy?.name||"—"}</span></span>
+                  <span>·</span>
+                  <span>{fmtDT(r.requestedAt)}</span>
+                </div>
+
+                {/* OT vinculada */}
+                {linkedOT&&(
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold"><CheckCircle size={12}/>OT Generada: {linkedOT.code}</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Estado</span><div className="mt-0.5"><Badge s={linkedOT.status}/></div></div>
+                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Mecánico</span><p className="text-gray-700 font-medium mt-0.5">{users.find(u=>u.id===linkedOT.assignedTo)?.name||"—"}</p></div>
+                      {linkedOT.scheduledDate&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Programado</span><p className="text-gray-700 font-medium mt-0.5">{fmt(linkedOT.scheduledDate)}</p></div>}
+                      {linkedOT.actualHours&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Horas Reales</span><p className="text-emerald-700 font-bold mt-0.5">{linkedOT.actualHours}h</p></div>}
+                    </div>
+                    {linkedOT.observations&&(
+                      <div className="border-t border-emerald-100 pt-2">
+                        <p className="text-gray-400 uppercase tracking-wide text-xs mb-0.5">Observaciones del Mecánico</p>
+                        <p className="text-gray-700 text-xs leading-relaxed">{linkedOT.observations}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );})}
+          );
+        })}
       </div>
       {showForm&&(
         <Modal title="Nueva Solicitud de Reparación" onClose={()=>setShowForm(false)}>
           <div className="space-y-3">
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label><select value={form.equipId} onChange={e=>setForm(f=>({...f,equipId:e.target.value}))} className={sCls}><option value="">Seleccionar...</option>{equip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}</select></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">FALLA DETECTADA</label><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls}/></div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN</label><textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"}/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">SUBSISTEMA</label>
+              <select value={form.subsistema} onChange={e=>setForm(f=>({...f,subsistema:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="hidraulico">Hidráulico</option>
+                <option value="mecanico">Mecánico</option>
+                <option value="neumatico">Neumático</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">COMPONENTE EN FALLA</label><input value={form.componente} onChange={e=>setForm(f=>({...f,componente:e.target.value}))} className={iCls} placeholder="ej: Motor, Válvula, Sensor, Cilindro..."/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">FALLA DETECTADA *</label><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve de la falla"/></div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DE LA FALLA</label><textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Detalla síntomas, condiciones, frecuencia..."/></div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label><select value={form.priority} onChange={e=>setForm(f=>({...f,priority:e.target.value}))} className={sCls}><option value="alta">Alta — Detiene operaciones</option><option value="media">Media — Afecta rendimiento</option><option value="baja">Baja — Sin impacto inmediato</option></select></div>
           </div>
           <ModalActions onSave={createReq} onCancel={()=>setShowForm(false)} label="Enviar Solicitud"/>
@@ -1043,7 +1405,7 @@ function DeviationReports({user,data,setData}){
   const {requests:allReqs,equip,users,wos}=data;
   const deviations=allReqs.filter(r=>r.source==="inspeccion");
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+  const [form,setForm]=useState({equipId:"",title:"",type:"fuera_de_programa",subsistema:"",componente:"",description:"",priority:"media"});
   const role=user.role;
   const visible=role==="supervisor"?deviations:deviations.filter(d=>d.requestedBy===user.id);
 
@@ -1052,7 +1414,7 @@ function DeviationReports({user,data,setData}){
     const nd={id:uid(),...form,status:"pendiente",source:"inspeccion",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};
     const updated=[...allReqs,nd];
     setData(d=>({...d,requests:updated}));saveData("requests",updated);
-    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",description:"",priority:"media"});
+    setShowForm(false);setForm({equipId:"",title:"",type:"fuera_de_programa",subsistema:"",componente:"",description:"",priority:"media"});
   };
 
   const DEV_TYPE_LABEL={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía",desgaste:"Desgaste",otro:"Otro"};
@@ -1079,6 +1441,7 @@ function DeviationReports({user,data,setData}){
                   <span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-gray-50 border-gray-200">{DEV_TYPE_LABEL[d.type]||d.type}</span>
                 </div>
                 <p className="text-gray-800 font-semibold text-sm mb-1">{d.title}</p>
+                {(d.subsistema||d.componente)&&<div className="flex items-center gap-3 mb-1 text-xs"><span className="text-gray-400">Subsistema:</span><span className="font-medium text-gray-700">{({electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"})[d.subsistema]||d.subsistema||"—"}</span>{d.componente&&<><span className="text-gray-300">|</span><span className="text-gray-400">Componente:</span><span className="font-medium text-gray-700">{d.componente}</span></>}</div>}
                 <p className="text-gray-500 text-xs mb-2">{d.description}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
                   <span>{eq?.name||"—"}</span><span>·</span><span>{repBy?.name||"—"}</span><span>·</span><span>{fmtDT(d.requestedAt)}</span>
@@ -1115,10 +1478,22 @@ function DeviationReports({user,data,setData}){
                 <option value="otro">Otro</option>
               </select>
             </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">SUBSISTEMA</label>
+              <select value={form.subsistema} onChange={e=>setForm(f=>({...f,subsistema:e.target.value}))} className={sCls}>
+                <option value="">Seleccionar...</option>
+                <option value="electrico">Eléctrico</option>
+                <option value="hidraulico">Hidráulico</option>
+                <option value="mecanico">Mecánico</option>
+                <option value="neumatico">Neumático</option>
+              </select>
+            </div>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">COMPONENTE EN FALLA</label>
+              <input value={form.componente} onChange={e=>setForm(f=>({...f,componente:e.target.value}))} className={iCls} placeholder="ej: Motor, Válvula, Sensor, Cilindro..."/>
+            </div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">TÍTULO / HALLAZGO *</label>
               <input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} className={iCls} placeholder="Descripción breve del hallazgo"/>
             </div>
-            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DETALLADA</label>
+            <div><label className="text-gray-500 text-xs font-medium mb-1 block">DESCRIPCIÓN DE LA FALLA</label>
               <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} rows={3} className={iCls+" resize-none"} placeholder="Describe la desviación encontrada..."/>
             </div>
             <div><label className="text-gray-500 text-xs font-medium mb-1 block">PRIORIDAD</label>
@@ -1132,6 +1507,248 @@ function DeviationReports({user,data,setData}){
           <ModalActions onSave={createDev} onCancel={()=>setShowForm(false)} label="Enviar Reporte"/>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ─── CHECKLIST ───────────────────────────────────────────────────────────────
+const CL_STATUS={bueno:{bg:"#16a34a",lbl:"✓",cls:"text-emerald-700 bg-emerald-50 border-emerald-200"},regular:{bg:"#f59e0b",lbl:"~",cls:"text-amber-700 bg-amber-50 border-amber-200"},malo:{bg:"#ef4444",lbl:"✗",cls:"text-red-700 bg-red-50 border-red-200"}};
+function Checklist({user,data,setData}){
+  const {checklists,equip,requests,users}=data;
+  const allCL=checklists||[];
+  const [editing,setEditing]=useState(false);
+  const [setup,setSetup]=useState({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+  const [items,setItems]=useState([]);
+  const [step,setStep]=useState(1);
+
+  const tplEquip=type=>equip.filter(e=>CHECKLIST_TEMPLATES[type].equipTypes.includes(e.type));
+
+  const startForm=()=>{
+    if(!setup.equipId||!setup.horometro)return;
+    const tpl=CHECKLIST_TEMPLATES[setup.equipType];
+    const flat=tpl.sections.flatMap(s=>s.items.map(it=>({...it,sectionLabel:s.label,status:null,note:""})));
+    setItems(flat);setStep(2);
+  };
+
+  const setItemStatus=(id,status)=>setItems(prev=>prev.map(it=>it.id===id?{...it,status}:it));
+  const setItemNote=(id,note)=>setItems(prev=>prev.map(it=>it.id===id?{...it,note}:it));
+
+  const issueItems=items.filter(it=>it.status==="malo"||it.status==="regular");
+  const pendingCount=items.filter(it=>it.status===null).length;
+
+  const submit=()=>{
+    if(pendingCount>0){alert(`Faltan ${pendingCount} ítem${pendingCount!==1?"s":""} sin evaluar`);return;}
+    const eq=equip.find(e=>e.id===setup.equipId);
+    const newCL={
+      id:uid(),type:setup.equipType,equipId:setup.equipId,operatorId:user.id,
+      horometro:parseFloat(setup.horometro)||0,fuel:setup.fuel,
+      items:items.map(it=>({id:it.id,name:it.name,sectionLabel:it.sectionLabel,status:it.status,note:it.note})),
+      createdAt:new Date().toISOString(),hasIssues:issueItems.length>0,issueCount:issueItems.length
+    };
+    const updC=[...allCL,newCL];
+    setData(d=>({...d,checklists:updC}));saveData("checklists",updC);
+    if(issueItems.length>0){
+      const hasMalo=issueItems.some(it=>it.status==="malo");
+      const issueList=issueItems.map(it=>`• [${it.status==="malo"?"MALO":"REGULAR"}] ${it.sectionLabel}: ${it.name}${it.note?` — ${it.note}`:""}`).join("\n");
+      const sol={
+        id:uid(),
+        title:`Checklist Pre-op — ${eq?.code} — ${issueItems.length} obs.`,
+        equipId:setup.equipId,
+        subsistema:"general",
+        componente:issueItems.length===1?issueItems[0].name:"Múltiples sistemas",
+        description:`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}\n\nObservaciones detectadas:\n${issueList}`,
+        priority:hasMalo?"alta":"media",
+        status:"pendiente",
+        requestedBy:user.id,
+        requestedAt:new Date().toISOString(),
+        source:"checklist",
+        checklistId:newCL.id
+      };
+      const updR=[...(requests||[]),sol];
+      setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    setEditing(false);setStep(1);setItems([]);
+    setSetup({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+    alert(`✅ Checklist guardado${issueItems.length>0?` · ${issueItems.length} obs. enviadas a Operaciones.`:". Sin observaciones."}`);
+  };
+
+  const mine=user.role==="supervisor"?allCL:[...allCL].filter(c=>c.operatorId===user.id);
+
+  if(!editing){
+    return(
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div><h1 className="text-gray-900 font-bold text-xl">Checklist Pre-Operacional</h1><p className="text-gray-500 text-sm">Inspección diaria de equipos antes de operar</p></div>
+          {user.role==="operador"&&<button onClick={()=>setEditing(true)} className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Checklist</button>}
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {[["Total mes",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))).length,"text-gray-800"],["Sin obs.",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))&&!c.hasIssues).length,"text-emerald-600"],["Con obs.",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))&&c.hasIssues).length,"text-amber-600"]].map(([l,v,cl])=>(
+            <div key={l} className={`${card} p-4 text-center`}><p className={`text-2xl font-bold ${cl}`}>{v}</p><p className="text-gray-400 text-xs mt-1">{l}</p></div>
+          ))}
+        </div>
+        {mine.length===0&&<div className="text-center py-16 text-gray-400"><CheckCircle size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin checklists registrados</p><p className="text-sm mt-1">Completa la inspección pre-operacional antes de operar el equipo</p></div>}
+        <div className="space-y-3">
+          {[...mine].reverse().map(c=>{
+            const eq=equip.find(e=>e.id===c.equipId);
+            const op=users.find(u=>u.id===c.operatorId);
+            return(
+              <div key={c.id} className={`${card} p-4 flex items-start gap-4`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${c.hasIssues?"bg-amber-50 text-amber-600 border-amber-200":"bg-emerald-50 text-emerald-600 border-emerald-200"}`}>
+                  {c.hasIssues?<AlertTriangle size={18}/>:<CheckCircle size={18}/>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
+                    <span className="text-gray-600 text-xs">{eq?.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${c.hasIssues?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                      {c.hasIssues?`${c.issueCount} observación(es)`:"Sin observaciones"}
+                    </span>
+                  </div>
+                  <p className="text-gray-500 text-xs mt-1">{CHECKLIST_TEMPLATES[c.type]?.label||c.type} · {c.horometro.toLocaleString()}h · Comb: {c.fuel}</p>
+                  <p className="text-gray-400 text-xs">{fmtDT(c.createdAt)}{op?` · ${op.name}`:""}</p>
+                  {c.hasIssues&&<div className="mt-2 space-y-0.5">
+                    {c.items.filter(it=>it.status!=="bueno").map((it,i)=>(
+                      <p key={i} className={`text-xs ${it.status==="malo"?"text-red-600":"text-amber-600"}`}>• {it.sectionLabel}: {it.name}{it.note?` — ${it.note}`:""}</p>
+                    ))}
+                  </div>}
+                </div>
+                <span className="text-gray-400 text-xs flex-shrink-0">{c.items.length} ítems</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if(step===1){
+    const avEquip=tplEquip(setup.equipType);
+    return(
+      <div className="p-6 max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={()=>{setEditing(false);}} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50"><X size={16} className="text-gray-400"/></button>
+          <div><h1 className="text-gray-900 font-bold text-xl">Nuevo Checklist</h1><p className="text-gray-500 text-sm">Paso 1 de 2 — Identificación del equipo</p></div>
+        </div>
+        <div className={`${card} p-5 space-y-4`}>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-2 block">TIPO DE EQUIPO</label>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(CHECKLIST_TEMPLATES).map(([k,v])=>(
+                <button key={k} onClick={()=>setSetup(s=>({...s,equipType:k,equipId:""}))}
+                  className={`p-3 rounded-xl border-2 text-sm font-semibold transition text-left ${setup.equipType===k?"text-blue-700 bg-blue-50":"border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  style={setup.equipType===k?{borderColor:NV.blue}:{}}>
+                  <p>{v.label}</p>
+                  <p className="text-xs font-normal text-gray-400 mt-0.5">{v.sections.reduce((a,s)=>a+s.items.length,0)} ítems · {v.sections.length} secciones</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+            <select value={setup.equipId} onChange={e=>setSetup(s=>({...s,equipId:e.target.value}))} className={sCls}>
+              <option value="">Seleccionar equipo...</option>{avEquip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">HORÓMETRO ACTUAL (h)</label>
+              <input type="number" value={setup.horometro} onChange={e=>setSetup(s=>({...s,horometro:e.target.value}))} className={iCls} placeholder="ej: 1250"/>
+            </div>
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">NIVEL COMBUSTIBLE</label>
+              <div className="flex gap-1">
+                {["E","¼","½","¾","F"].map((v,i)=>{
+                  const vals=["E","1/4","1/2","3/4","F"];
+                  const sel=setup.fuel===vals[i];
+                  return<button key={v} onClick={()=>setSetup(s=>({...s,fuel:vals[i]}))}
+                    className={`flex-1 py-2 rounded-lg border text-xs font-bold transition ${sel?"text-white border-transparent":"bg-white border-gray-200 text-gray-500"}`}
+                    style={sel?{background:NV.blue}:{}}>{v}</button>;
+                })}
+              </div>
+            </div>
+          </div>
+          <button onClick={startForm} disabled={!setup.equipId||!setup.horometro}
+            className="w-full py-3 rounded-xl text-white font-bold text-sm transition"
+            style={{background:(!setup.equipId||!setup.horometro)?"#9ca3af":NV.blue}}>
+            Iniciar Inspección →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const tpl=CHECKLIST_TEMPLATES[setup.equipType];
+  const eq=equip.find(e=>e.id===setup.equipId);
+  const completed=items.filter(it=>it.status!==null).length;
+  const pct=Math.round((completed/items.length)*100);
+  return(
+    <div className="p-6 max-w-2xl pb-32">
+      <div className="flex items-center gap-3 mb-3">
+        <button onClick={()=>setStep(1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 flex-shrink-0">
+          <ArrowRight size={16} className="text-gray-400 rotate-180"/>
+        </button>
+        <div className="flex-1">
+          <h1 className="text-gray-900 font-bold text-lg">{tpl.label} — {eq?.code}</h1>
+          <p className="text-gray-500 text-xs">{completed}/{items.length} ítems · Horómetro: {setup.horometro}h</p>
+        </div>
+        <span className="text-sm font-bold" style={{color:pct===100?"#16a34a":NV.blue}}>{pct}%</span>
+      </div>
+      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-5">
+        <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:pct===100?"#16a34a":NV.blue}}/>
+      </div>
+      <div className="space-y-5">
+        {tpl.sections.map(section=>(
+          <div key={section.label}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-px flex-1 bg-gray-200"/><span className="text-xs font-bold uppercase tracking-wider" style={{color:NV.blue}}>{section.label}</span><div className="h-px flex-1 bg-gray-200"/>
+            </div>
+            <div className="space-y-2">
+              {section.items.map(sItem=>{
+                const it=items.find(x=>x.id===sItem.id);if(!it)return null;
+                const borderCl=it.status==="bueno"?"border-l-emerald-400":it.status==="malo"?"border-l-red-400":it.status==="regular"?"border-l-amber-400":"border-l-gray-200";
+                return(
+                  <div key={it.id} className={`${card} overflow-hidden border-l-4 ${borderCl}`}>
+                    <div className="p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">{it.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 font-semibold text-sm">{it.name}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{it.method}</p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          {Object.entries(CL_STATUS).map(([s,{bg,lbl}])=>(
+                            <button key={s} onClick={()=>setItemStatus(it.id,s)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition border ${it.status===s?"text-white border-transparent":"bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300"}`}
+                              style={it.status===s?{background:bg}:{}}
+                              title={s.charAt(0).toUpperCase()+s.slice(1)}>{lbl}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {(it.status==="regular"||it.status==="malo")&&(
+                        <div className="mt-2">
+                          <input value={it.note} onChange={e=>setItemNote(it.id,e.target.value)} className={iCls+" text-xs py-1.5"} placeholder="Nota / descripción del problema (opcional)..."/>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-gray-200 p-4 z-40">
+        {issueItems.length>0&&(
+          <div className="rounded-lg p-2.5 mb-3 text-xs" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
+            <span className="font-semibold">{issueItems.length} obs. detectada(s) — se creará solicitud automática a Operaciones: </span>
+            {issueItems.map((it,i)=><span key={i} className={`font-medium ${it.status==="malo"?"text-red-600":"text-amber-600"}`}>{i>0?", ":""}{it.name}</span>)}
+          </div>
+        )}
+        {pendingCount>0&&<p className="text-amber-600 text-xs text-center mb-2">{pendingCount} ítem{pendingCount!==1?"s":""} sin evaluar</p>}
+        <button onClick={submit} className="w-full py-3 rounded-xl text-white font-bold text-sm transition" style={{background:NV.blue}}>
+          {issueItems.length>0?`Enviar Checklist + ${issueItems.length} obs. a Operaciones`:"Enviar Checklist — Sin Observaciones"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1164,13 +1781,13 @@ function Notifications({user,data}){
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
   const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
-  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS});
+  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES,checklists:SEED_CHECKLISTS});
   const unsubs=useRef([]);
 
   useEffect(()=>{
-    const keys=["users","equipment","plans","requests","workOrders"];
-    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS};
-    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos"};
+    const keys=["users","equipment","plans","requests","workOrders","taskTemplates","checklists"];
+    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES,checklists:SEED_CHECKLISTS};
+    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",taskTemplates:"taskTemplates",checklists:"checklists"};
     (async()=>{
       for(const k of keys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
@@ -1212,6 +1829,7 @@ export default function App(){
     indicadores:   <Indicadores   data={data}/>,
     requests:      <Requests      user={user} data={data} setData={setData}/>,
     notifications: <Notifications user={user} data={data}/>,
+    checklist:     <Checklist     user={user} data={data} setData={setData}/>,
     reports:       <Reports       data={data}/>,
     deviaciones:   <DeviationReports user={user} data={data} setData={setData}/>,
     users:         <UsersPage     data={data} setData={setData}/>,
