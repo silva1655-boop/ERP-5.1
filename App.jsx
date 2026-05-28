@@ -131,6 +131,15 @@ async function saveData(key, arr) {
 async function initIfEmpty(key, seed) {
   try { const s=await getDoc(doc(db,COLL,key)); if(!s.exists()) await setDoc(doc(db,COLL,key),{data:seed}); } catch(e) { console.error("Init:",e); }
 }
+async function mergeUsers(seed) {
+  try {
+    const s=await getDoc(doc(db,COLL,"users"));
+    if(!s.exists()){await setDoc(doc(db,COLL,"users"),{data:seed});return;}
+    const existing=s.data().data||[];
+    const missing=seed.filter(su=>!existing.find(eu=>eu.id===su.id));
+    if(missing.length>0)await setDoc(doc(db,COLL,"users"),{data:[...existing,...missing]});
+  }catch(e){console.error("MergeUsers:",e);}
+}
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 const fmt   = d => d ? new Date(d).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
@@ -1789,7 +1798,9 @@ export default function App(){
     const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES,checklists:SEED_CHECKLISTS};
     const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",taskTemplates:"taskTemplates",checklists:"checklists"};
     (async()=>{
-      for(const k of keys) await initIfEmpty(k,seeds[k]);
+      await mergeUsers(SEED_USERS);
+      const otherKeys=keys.filter(k=>k!=="users");
+      for(const k of otherKeys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
         snap=>{setOnline(true);if(snap.exists())setData(d=>({...d,[dk[k]]:snap.data().data}));},
         ()=>setOnline(false)
