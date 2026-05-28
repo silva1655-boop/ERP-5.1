@@ -15,6 +15,8 @@ const SEED_USERS = [
   { id:"u2", name:"José Muñoz",        role:"supervisor",  email:"jmunoz@navimag.cl",  password:"Navimag2026", avatar:"JM" },
   { id:"u3", name:"Felipe Stein",      role:"operaciones", email:"fstein@navimag.cl",  password:"Navimag2026", avatar:"FS" },
   { id:"u4", name:"Jorge Soto",        role:"operaciones", email:"jsoto@navimag.cl",   password:"Navimag2026", avatar:"JS" },
+  { id:"u5", name:"Operador 1",        role:"operador",    email:"op1@navimag.cl",     password:"Navimag2026", avatar:"O1" },
+  { id:"u6", name:"Operador 2",        role:"operador",    email:"op2@navimag.cl",     password:"Navimag2026", avatar:"O2" },
 ];
 
 // ─── EQUIPOS NAVIMAG ──────────────────────────────────────────────────────────
@@ -48,6 +50,77 @@ const SEED_REQUESTS       = [];
 const SEED_WORK_ORDERS    = [];
 const SEED_DEVIATIONS     = [];
 const SEED_TASK_TEMPLATES = [];
+const SEED_CHECKLISTS     = [];
+
+// ─── CHECKLIST TEMPLATES ─────────────────────────────────────────────────────
+const CHECKLIST_TEMPLATES = {
+  tracto:{
+    label:"Tracto Camión",
+    equipTypes:["Tracto Terminal","Tracto Portuario"],
+    sections:[
+      {label:"General", items:[
+        {id:"tc_fugas",       name:"Fugas de aceite, líquido o aire",      method:"Visualmente / escuchando bajo el vehículo",    icon:"💧"},
+      ]},
+      {label:"Motor", items:[
+        {id:"tc_aceite_m",    name:"Nivel de aceite motor",                method:"Varilla de medición",                          icon:"🛢️"},
+        {id:"tc_refrig",      name:"Nivel de refrigerante",                method:"Visualmente — depósito / indicador panel CAN", icon:"🌡️"},
+      ]},
+      {label:"Frenos", items:[
+        {id:"tc_frenos",      name:"Frenos — funcionamiento",              method:"Prueba después del desplazamiento",            icon:"🛑"},
+      ]},
+      {label:"Suspensión y Neumáticos", items:[
+        {id:"tc_acopl",       name:"Acoplamiento de la rueda",             method:"Visualmente",                                  icon:"🔩"},
+        {id:"tc_neum_del",    name:"Neumático delantero",                  method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_tra",    name:"Neumático trasero",                    method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_ti",     name:"Neumático trasero izquierdo",          method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+        {id:"tc_neum_td",     name:"Neumático trasero derecho",            method:"Visualmente — cortes, presión, deformación",   icon:"🔵"},
+      ]},
+      {label:"Cabina y Luces", items:[
+        {id:"tc_luces_f",     name:"Luces faeneras y señalización",        method:"Visualmente / escuchando zumbadores",          icon:"🔦"},
+        {id:"tc_controles",   name:"Controles e indicadores luminosos",    method:"Visualmente — antes y después de arrancar",    icon:"🎛️"},
+        {id:"tc_clavijas",    name:"Clavijas de bloqueo de cabina",        method:"Visualmente — abrazaderas traseras",           icon:"🔒"},
+        {id:"tc_luces_izq",   name:"Luces delanteras izquierda",           method:"Visualmente / comprobando funcionamiento",     icon:"💡"},
+        {id:"tc_luces_der",   name:"Luces delanteras derecha",             method:"Visualmente / comprobando funcionamiento",     icon:"💡"},
+        {id:"tc_limpia",      name:"Limpiaparabrisas / nivel líquido",     method:"Visualmente / comprobando nivel depósito",     icon:"🌊"},
+      ]},
+      {label:"Sistema Hidráulico y Carga", items:[
+        {id:"tc_5ta_rueda",   name:"5ª Rueda y brazo de elevación",        method:"Visualmente — lubricación si necesario",       icon:"⚙️"},
+        {id:"tc_aceite_h",    name:"Nivel de aceite hidráulico",           method:"Mirilla de medición",                          icon:"🔧"},
+        {id:"tc_valvula",     name:"Válvula lógica de dirección",          method:"Funcional — girar ruedas y asiento",           icon:"🔄"},
+      ]},
+    ]
+  },
+  grua_horquilla:{
+    label:"Grúa Horquilla",
+    equipTypes:["Montacargas"],
+    sections:[
+      {label:"Motor", items:[
+        {id:"gh_fugas",       name:"Fugas de aceite, líquido o aire",      method:"Visualmente bajo la máquina",                  icon:"💧"},
+        {id:"gh_aceite_m",    name:"Nivel de aceite motor",                method:"Varilla de medición",                          icon:"🛢️"},
+        {id:"gh_refrig",      name:"Nivel de refrigerante",                method:"Visualmente — depósito de expansión",          icon:"🌡️"},
+      ]},
+      {label:"Sistema Hidráulico", items:[
+        {id:"gh_aceite_h",    name:"Nivel de aceite hidráulico",           method:"Mirilla / varilla de medición",                icon:"🔧"},
+        {id:"gh_mangueras",   name:"Cilindros y mangueras hidráulicas",    method:"Visualmente — sin fugas activas",              icon:"🔩"},
+      ]},
+      {label:"Mástil y Horquillas", items:[
+        {id:"gh_mastil",      name:"Estado del mástil",                    method:"Visualmente — fisuras, deformaciones",         icon:"📏"},
+        {id:"gh_horquillas",  name:"Horquillas y porta-horquillas",        method:"Visualmente — deformación, grietas",           icon:"⚙️"},
+        {id:"gh_cadenas",     name:"Cadenas de elevación",                 method:"Visualmente — elongación, corrosión",          icon:"⛓️"},
+      ]},
+      {label:"Ruedas y Frenos", items:[
+        {id:"gh_ruedas",      name:"Estado de ruedas",                     method:"Visualmente — desgaste, cortes, deformación",  icon:"⭕"},
+        {id:"gh_frenos",      name:"Frenos de servicio y parqueo",         method:"Prueba funcional antes de operar",             icon:"🛑"},
+      ]},
+      {label:"Cabina y Controles", items:[
+        {id:"gh_cinturon",    name:"Cinturón de seguridad",                method:"Visualmente / funcional — bloqueo correcto",   icon:"🔒"},
+        {id:"gh_luces",       name:"Luces y señalización acústica",        method:"Visualmente / funcional",                      icon:"🔦"},
+        {id:"gh_controles",   name:"Controles e indicadores panel",        method:"Visualmente — antes y después de arrancar",    icon:"🎛️"},
+        {id:"gh_bateria",     name:"Nivel batería / combustible GLP",      method:"Indicador carga / manómetro presión",          icon:"🔋"},
+      ]},
+    ]
+  },
+};
 
 // ─── COLECCIÓN NUEVA (fuerza reinicio de datos en Firebase) ──────────────────
 const COLL = "mantek_v2";
@@ -96,9 +169,10 @@ const PRI_CLS ={alta:"text-red-700 bg-red-50 border-red-200",media:"text-amber-7
 const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100 border-gray-300"};return<span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${c.cls}`}>{label||c.label}</span>;};
 
 const ROLE_CFG={
-  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,   nav:["dashboard","workorders","equipment","plans","indicadores","requests","deviaciones","reports","users"]},
-  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,   nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity, nav:["dashboard","requests","notifications"]},
+  supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,       nav:["dashboard","workorders","equipment","plans","indicadores","requests","checklist","deviaciones","reports","users"]},
+  mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,       nav:["dashboard","workorders","deviaciones","reports"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","notifications"]},
+  operador:   {label:"Operador",   color:"text-green-300", bg:"bg-green-900/30",  icon:ClipboardList,nav:["dashboard","checklist","notifications"]},
 };
 
 const iCls="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100";
@@ -246,16 +320,17 @@ function LoginPage({users,onLogin}){
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 const NAV_ITEMS={
-  dashboard:     {label:"Dashboard",          icon:BarChart2},
-  workorders:    {label:"Órdenes de Trabajo", icon:ClipboardList},
-  equipment:     {label:"Equipos",            icon:Package},
-  plans:         {label:"Plan Preventivo",    icon:Calendar},
-  indicadores:   {label:"Indicadores KPI",    icon:TrendingUp},
-  requests:      {label:"Solicitudes",        icon:Bell},
-  notifications: {label:"Notificaciones",     icon:Bell},
-  deviaciones:   {label:"Rep. Inspección",    icon:FileWarning},
-  reports:       {label:"Informes",           icon:FileText},
-  users:         {label:"Usuarios",           icon:Users},
+  dashboard:     {label:"Dashboard",            icon:BarChart2},
+  workorders:    {label:"Órdenes de Trabajo",   icon:ClipboardList},
+  equipment:     {label:"Equipos",              icon:Package},
+  plans:         {label:"Plan Preventivo",      icon:Calendar},
+  indicadores:   {label:"Indicadores KPI",      icon:TrendingUp},
+  requests:      {label:"Solicitudes",          icon:Bell},
+  notifications: {label:"Notificaciones",       icon:Bell},
+  checklist:     {label:"Checklist Pre-op",     icon:CheckCircle},
+  deviaciones:   {label:"Rep. Inspección",      icon:FileWarning},
+  reports:       {label:"Informes",             icon:FileText},
+  users:         {label:"Usuarios",             icon:Users},
 };
 function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devBadge,online}){
   const cfg=ROLE_CFG[user.role]; const RoleIcon=cfg.icon;
@@ -315,7 +390,15 @@ function Sidebar({user,active,onNav,onLogout,onChangePassword,notifications,devB
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 function Dashboard({user,data,onNav}){
-  const {wos,equip,requests}=data; const role=user.role;
+  const {wos,equip,requests,checklists}=data; const role=user.role;
+  const allCL=checklists||[];
+  const thisMonth=new Date().toISOString().slice(0,7);
+  const monthCL=allCL.filter(c=>c.createdAt?.startsWith(thisMonth));
+  const clByEquip=equip.map(e=>({
+    eq:e,
+    count:monthCL.filter(c=>c.equipId===e.id).length,
+    issues:monthCL.filter(c=>c.equipId===e.id&&c.hasIssues).length
+  })).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
   const pendingWOs=wos.filter(w=>w.status!=="completada"&&w.status!=="cancelada");
   const myWOs=wos.filter(w=>w.assignedTo===user.id&&w.status!=="completada");
   const fallas=equip.filter(e=>e.status==="falla");
@@ -417,6 +500,58 @@ function Dashboard({user,data,onNav}){
           {requests.filter(r=>r.requestedBy===user.id).length===0&&<p className="text-gray-400 text-sm text-center py-6">Sin solicitudes registradas</p>}
         </div>
       </>}
+      {role==="operador"&&<>
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard icon={CheckCircle}   label="Mis Checklists"    value={allCL.filter(c=>c.operatorId===user.id&&c.createdAt?.startsWith(thisMonth)).length} sub="este mes" color="emerald"/>
+          <StatCard icon={AlertTriangle} label="Obs. Reportadas"   value={allCL.filter(c=>c.operatorId===user.id&&c.hasIssues&&c.createdAt?.startsWith(thisMonth)).length} sub="este mes" color="amber"/>
+        </div>
+        <div className={`${card} p-5`}>
+          <h2 className="font-semibold text-sm mb-4" style={{color:NV.navy}}>Mis Checklists Recientes</h2>
+          {allCL.filter(c=>c.operatorId===user.id).slice(-5).reverse().map(c=>{
+            const eq=equip.find(e=>e.id===c.equipId);
+            return<div key={c.id} className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.hasIssues?"bg-amber-400":"bg-emerald-500"}`}/>
+              <span className="text-gray-700 text-xs flex-1">{eq?.code} — {CHECKLIST_TEMPLATES[c.type]?.label||c.type}</span>
+              <span className="text-gray-400 text-xs">{c.hasIssues?`${c.issueCount} obs.`:"OK"}</span>
+            </div>;
+          })}
+          {allCL.filter(c=>c.operatorId===user.id).length===0&&<p className="text-gray-400 text-sm text-center py-6">No has completado ningún checklist</p>}
+        </div>
+      </>}
+
+      {/* Checklist stats widget — visible to all roles */}
+      {monthCL.length>0&&(
+        <div className={`${card} p-5`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-sm flex items-center gap-2" style={{color:NV.navy}}><CheckCircle size={15}/>Checklists del Mes</h2>
+            <div className="flex gap-4 text-xs">
+              <span className="text-gray-500">{monthCL.length} total</span>
+              <span className="text-emerald-600 font-medium">{monthCL.filter(c=>!c.hasIssues).length} sin obs.</span>
+              <span className="text-amber-600 font-medium">{monthCL.filter(c=>c.hasIssues).length} con obs.</span>
+            </div>
+          </div>
+          {clByEquip.length===0?<p className="text-gray-400 text-xs text-center py-2">Sin datos este mes</p>:(
+            <table className="w-full text-xs">
+              <thead><tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left py-1.5 font-medium">Equipo</th>
+                <th className="text-right py-1.5 font-medium">Checklists</th>
+                <th className="text-right py-1.5 font-medium">Con Obs.</th>
+                <th className="text-right py-1.5 font-medium">Estado</th>
+              </tr></thead>
+              <tbody>{clByEquip.slice(0,8).map(({eq,count,issues})=>(
+                <tr key={eq.id} className="border-b border-gray-50 last:border-0">
+                  <td className="py-1.5"><span className="font-mono font-semibold" style={{color:NV.blue}}>{eq.code}</span> <span className="text-gray-500">{eq.name}</span></td>
+                  <td className="py-1.5 text-right text-gray-700 font-semibold">{count}</td>
+                  <td className="py-1.5 text-right"><span className={issues>0?"text-amber-600 font-semibold":"text-gray-400"}>{issues}</span></td>
+                  <td className="py-1.5 text-right">
+                    <div className="flex justify-end gap-0.5">{Array.from({length:count},(_, i)=><span key={i} className={`inline-block w-2 h-2 rounded-sm ${i<issues?"bg-amber-400":"bg-emerald-400"}`}/>)}</div>
+                  </td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1052,7 +1187,7 @@ function Requests({user,data,setData}){
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
   const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
   const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});};
-  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
+  const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const isCL=req.source==="checklist";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isCL?"Checklist":isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   const markRevised=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"revisado",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
   return(
@@ -1075,15 +1210,16 @@ function Requests({user,data,setData}){
                   <Badge s={r.status}/>
                   <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
                   {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
+                  {r.source==="checklist"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-green-700 bg-green-50 border-green-200">Checklist Pre-op</span>}
                   {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE[r.type]||r.type}</span>}
                   {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
                 </div>
-                {user.role==="supervisor"&&r.status==="pendiente"&&(
+                {(user.role==="supervisor"||(user.role==="operaciones"&&r.source==="checklist"))&&r.status==="pendiente"&&(
                   <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
+                    <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Crear OT</button>
                     {r.source==="inspeccion"
                       ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
-                      :<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                      :r.source!=="checklist"&&<button onClick={()=>reject(r)}  className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
                     }
                   </div>
                 )}
@@ -1375,6 +1511,248 @@ function DeviationReports({user,data,setData}){
   );
 }
 
+// ─── CHECKLIST ───────────────────────────────────────────────────────────────
+const CL_STATUS={bueno:{bg:"#16a34a",lbl:"✓",cls:"text-emerald-700 bg-emerald-50 border-emerald-200"},regular:{bg:"#f59e0b",lbl:"~",cls:"text-amber-700 bg-amber-50 border-amber-200"},malo:{bg:"#ef4444",lbl:"✗",cls:"text-red-700 bg-red-50 border-red-200"}};
+function Checklist({user,data,setData}){
+  const {checklists,equip,requests,users}=data;
+  const allCL=checklists||[];
+  const [editing,setEditing]=useState(false);
+  const [setup,setSetup]=useState({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+  const [items,setItems]=useState([]);
+  const [step,setStep]=useState(1);
+
+  const tplEquip=type=>equip.filter(e=>CHECKLIST_TEMPLATES[type].equipTypes.includes(e.type));
+
+  const startForm=()=>{
+    if(!setup.equipId||!setup.horometro)return;
+    const tpl=CHECKLIST_TEMPLATES[setup.equipType];
+    const flat=tpl.sections.flatMap(s=>s.items.map(it=>({...it,sectionLabel:s.label,status:null,note:""})));
+    setItems(flat);setStep(2);
+  };
+
+  const setItemStatus=(id,status)=>setItems(prev=>prev.map(it=>it.id===id?{...it,status}:it));
+  const setItemNote=(id,note)=>setItems(prev=>prev.map(it=>it.id===id?{...it,note}:it));
+
+  const issueItems=items.filter(it=>it.status==="malo"||it.status==="regular");
+  const pendingCount=items.filter(it=>it.status===null).length;
+
+  const submit=()=>{
+    if(pendingCount>0){alert(`Faltan ${pendingCount} ítem${pendingCount!==1?"s":""} sin evaluar`);return;}
+    const eq=equip.find(e=>e.id===setup.equipId);
+    const newCL={
+      id:uid(),type:setup.equipType,equipId:setup.equipId,operatorId:user.id,
+      horometro:parseFloat(setup.horometro)||0,fuel:setup.fuel,
+      items:items.map(it=>({id:it.id,name:it.name,sectionLabel:it.sectionLabel,status:it.status,note:it.note})),
+      createdAt:new Date().toISOString(),hasIssues:issueItems.length>0,issueCount:issueItems.length
+    };
+    const updC=[...allCL,newCL];
+    setData(d=>({...d,checklists:updC}));saveData("checklists",updC);
+    if(issueItems.length>0){
+      const hasMalo=issueItems.some(it=>it.status==="malo");
+      const issueList=issueItems.map(it=>`• [${it.status==="malo"?"MALO":"REGULAR"}] ${it.sectionLabel}: ${it.name}${it.note?` — ${it.note}`:""}`).join("\n");
+      const sol={
+        id:uid(),
+        title:`Checklist Pre-op — ${eq?.code} — ${issueItems.length} obs.`,
+        equipId:setup.equipId,
+        subsistema:"general",
+        componente:issueItems.length===1?issueItems[0].name:"Múltiples sistemas",
+        description:`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}\n\nObservaciones detectadas:\n${issueList}`,
+        priority:hasMalo?"alta":"media",
+        status:"pendiente",
+        requestedBy:user.id,
+        requestedAt:new Date().toISOString(),
+        source:"checklist",
+        checklistId:newCL.id
+      };
+      const updR=[...(requests||[]),sol];
+      setData(d=>({...d,requests:updR}));saveData("requests",updR);
+    }
+    setEditing(false);setStep(1);setItems([]);
+    setSetup({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+    alert(`✅ Checklist guardado${issueItems.length>0?` · ${issueItems.length} obs. enviadas a Operaciones.`:". Sin observaciones."}`);
+  };
+
+  const mine=user.role==="supervisor"?allCL:[...allCL].filter(c=>c.operatorId===user.id);
+
+  if(!editing){
+    return(
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div><h1 className="text-gray-900 font-bold text-xl">Checklist Pre-Operacional</h1><p className="text-gray-500 text-sm">Inspección diaria de equipos antes de operar</p></div>
+          {user.role==="operador"&&<button onClick={()=>setEditing(true)} className={btnPrimary} style={{background:NV.blue}}><Plus size={15}/>Nuevo Checklist</button>}
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {[["Total mes",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))).length,"text-gray-800"],["Sin obs.",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))&&!c.hasIssues).length,"text-emerald-600"],["Con obs.",mine.filter(c=>c.createdAt?.startsWith(new Date().toISOString().slice(0,7))&&c.hasIssues).length,"text-amber-600"]].map(([l,v,cl])=>(
+            <div key={l} className={`${card} p-4 text-center`}><p className={`text-2xl font-bold ${cl}`}>{v}</p><p className="text-gray-400 text-xs mt-1">{l}</p></div>
+          ))}
+        </div>
+        {mine.length===0&&<div className="text-center py-16 text-gray-400"><CheckCircle size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin checklists registrados</p><p className="text-sm mt-1">Completa la inspección pre-operacional antes de operar el equipo</p></div>}
+        <div className="space-y-3">
+          {[...mine].reverse().map(c=>{
+            const eq=equip.find(e=>e.id===c.equipId);
+            const op=users.find(u=>u.id===c.operatorId);
+            return(
+              <div key={c.id} className={`${card} p-4 flex items-start gap-4`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${c.hasIssues?"bg-amber-50 text-amber-600 border-amber-200":"bg-emerald-50 text-emerald-600 border-emerald-200"}`}>
+                  {c.hasIssues?<AlertTriangle size={18}/>:<CheckCircle size={18}/>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
+                    <span className="text-gray-600 text-xs">{eq?.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${c.hasIssues?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                      {c.hasIssues?`${c.issueCount} observación(es)`:"Sin observaciones"}
+                    </span>
+                  </div>
+                  <p className="text-gray-500 text-xs mt-1">{CHECKLIST_TEMPLATES[c.type]?.label||c.type} · {c.horometro.toLocaleString()}h · Comb: {c.fuel}</p>
+                  <p className="text-gray-400 text-xs">{fmtDT(c.createdAt)}{op?` · ${op.name}`:""}</p>
+                  {c.hasIssues&&<div className="mt-2 space-y-0.5">
+                    {c.items.filter(it=>it.status!=="bueno").map((it,i)=>(
+                      <p key={i} className={`text-xs ${it.status==="malo"?"text-red-600":"text-amber-600"}`}>• {it.sectionLabel}: {it.name}{it.note?` — ${it.note}`:""}</p>
+                    ))}
+                  </div>}
+                </div>
+                <span className="text-gray-400 text-xs flex-shrink-0">{c.items.length} ítems</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if(step===1){
+    const avEquip=tplEquip(setup.equipType);
+    return(
+      <div className="p-6 max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={()=>{setEditing(false);}} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50"><X size={16} className="text-gray-400"/></button>
+          <div><h1 className="text-gray-900 font-bold text-xl">Nuevo Checklist</h1><p className="text-gray-500 text-sm">Paso 1 de 2 — Identificación del equipo</p></div>
+        </div>
+        <div className={`${card} p-5 space-y-4`}>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-2 block">TIPO DE EQUIPO</label>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(CHECKLIST_TEMPLATES).map(([k,v])=>(
+                <button key={k} onClick={()=>setSetup(s=>({...s,equipType:k,equipId:""}))}
+                  className={`p-3 rounded-xl border-2 text-sm font-semibold transition text-left ${setup.equipType===k?"text-blue-700 bg-blue-50":"border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  style={setup.equipType===k?{borderColor:NV.blue}:{}}>
+                  <p>{v.label}</p>
+                  <p className="text-xs font-normal text-gray-400 mt-0.5">{v.sections.reduce((a,s)=>a+s.items.length,0)} ítems · {v.sections.length} secciones</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+            <select value={setup.equipId} onChange={e=>setSetup(s=>({...s,equipId:e.target.value}))} className={sCls}>
+              <option value="">Seleccionar equipo...</option>{avEquip.map(e=><option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">HORÓMETRO ACTUAL (h)</label>
+              <input type="number" value={setup.horometro} onChange={e=>setSetup(s=>({...s,horometro:e.target.value}))} className={iCls} placeholder="ej: 1250"/>
+            </div>
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">NIVEL COMBUSTIBLE</label>
+              <div className="flex gap-1">
+                {["E","¼","½","¾","F"].map((v,i)=>{
+                  const vals=["E","1/4","1/2","3/4","F"];
+                  const sel=setup.fuel===vals[i];
+                  return<button key={v} onClick={()=>setSetup(s=>({...s,fuel:vals[i]}))}
+                    className={`flex-1 py-2 rounded-lg border text-xs font-bold transition ${sel?"text-white border-transparent":"bg-white border-gray-200 text-gray-500"}`}
+                    style={sel?{background:NV.blue}:{}}>{v}</button>;
+                })}
+              </div>
+            </div>
+          </div>
+          <button onClick={startForm} disabled={!setup.equipId||!setup.horometro}
+            className="w-full py-3 rounded-xl text-white font-bold text-sm transition"
+            style={{background:(!setup.equipId||!setup.horometro)?"#9ca3af":NV.blue}}>
+            Iniciar Inspección →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const tpl=CHECKLIST_TEMPLATES[setup.equipType];
+  const eq=equip.find(e=>e.id===setup.equipId);
+  const completed=items.filter(it=>it.status!==null).length;
+  const pct=Math.round((completed/items.length)*100);
+  return(
+    <div className="p-6 max-w-2xl pb-32">
+      <div className="flex items-center gap-3 mb-3">
+        <button onClick={()=>setStep(1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 flex-shrink-0">
+          <ArrowRight size={16} className="text-gray-400 rotate-180"/>
+        </button>
+        <div className="flex-1">
+          <h1 className="text-gray-900 font-bold text-lg">{tpl.label} — {eq?.code}</h1>
+          <p className="text-gray-500 text-xs">{completed}/{items.length} ítems · Horómetro: {setup.horometro}h</p>
+        </div>
+        <span className="text-sm font-bold" style={{color:pct===100?"#16a34a":NV.blue}}>{pct}%</span>
+      </div>
+      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-5">
+        <div className="h-full rounded-full transition-all" style={{width:`${pct}%`,background:pct===100?"#16a34a":NV.blue}}/>
+      </div>
+      <div className="space-y-5">
+        {tpl.sections.map(section=>(
+          <div key={section.label}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-px flex-1 bg-gray-200"/><span className="text-xs font-bold uppercase tracking-wider" style={{color:NV.blue}}>{section.label}</span><div className="h-px flex-1 bg-gray-200"/>
+            </div>
+            <div className="space-y-2">
+              {section.items.map(sItem=>{
+                const it=items.find(x=>x.id===sItem.id);if(!it)return null;
+                const borderCl=it.status==="bueno"?"border-l-emerald-400":it.status==="malo"?"border-l-red-400":it.status==="regular"?"border-l-amber-400":"border-l-gray-200";
+                return(
+                  <div key={it.id} className={`${card} overflow-hidden border-l-4 ${borderCl}`}>
+                    <div className="p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">{it.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 font-semibold text-sm">{it.name}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{it.method}</p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          {Object.entries(CL_STATUS).map(([s,{bg,lbl}])=>(
+                            <button key={s} onClick={()=>setItemStatus(it.id,s)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition border ${it.status===s?"text-white border-transparent":"bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300"}`}
+                              style={it.status===s?{background:bg}:{}}
+                              title={s.charAt(0).toUpperCase()+s.slice(1)}>{lbl}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {(it.status==="regular"||it.status==="malo")&&(
+                        <div className="mt-2">
+                          <input value={it.note} onChange={e=>setItemNote(it.id,e.target.value)} className={iCls+" text-xs py-1.5"} placeholder="Nota / descripción del problema (opcional)..."/>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-gray-200 p-4 z-40">
+        {issueItems.length>0&&(
+          <div className="rounded-lg p-2.5 mb-3 text-xs" style={{background:NV.light,color:NV.navy,border:`1px solid #BFD9F2`}}>
+            <span className="font-semibold">{issueItems.length} obs. detectada(s) — se creará solicitud automática a Operaciones: </span>
+            {issueItems.map((it,i)=><span key={i} className={`font-medium ${it.status==="malo"?"text-red-600":"text-amber-600"}`}>{i>0?", ":""}{it.name}</span>)}
+          </div>
+        )}
+        {pendingCount>0&&<p className="text-amber-600 text-xs text-center mb-2">{pendingCount} ítem{pendingCount!==1?"s":""} sin evaluar</p>}
+        <button onClick={submit} className="w-full py-3 rounded-xl text-white font-bold text-sm transition" style={{background:NV.blue}}>
+          {issueItems.length>0?`Enviar Checklist + ${issueItems.length} obs. a Operaciones`:"Enviar Checklist — Sin Observaciones"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
 function Notifications({user,data}){
   const {wos,equip,requests}=data;
@@ -1403,13 +1781,13 @@ function Notifications({user,data}){
 export default function App(){
   const [user,setUser]=useState(null);const [page,setPage]=useState("dashboard");
   const [online,setOnline]=useState(true);const [loading,setLoading]=useState(true);const [showChangePwd,setShowChangePwd]=useState(false);
-  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES});
+  const [data,setData]=useState({users:SEED_USERS,equip:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,wos:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES,checklists:SEED_CHECKLISTS});
   const unsubs=useRef([]);
 
   useEffect(()=>{
-    const keys=["users","equipment","plans","requests","workOrders","taskTemplates"];
-    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES};
-    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",taskTemplates:"taskTemplates"};
+    const keys=["users","equipment","plans","requests","workOrders","taskTemplates","checklists"];
+    const seeds={users:SEED_USERS,equipment:SEED_EQUIPMENT,plans:SEED_PM_PLANS,requests:SEED_REQUESTS,workOrders:SEED_WORK_ORDERS,taskTemplates:SEED_TASK_TEMPLATES,checklists:SEED_CHECKLISTS};
+    const dk={users:"users",equipment:"equip",plans:"plans",requests:"requests",workOrders:"wos",taskTemplates:"taskTemplates",checklists:"checklists"};
     (async()=>{
       for(const k of keys) await initIfEmpty(k,seeds[k]);
       unsubs.current=keys.map(k=>onSnapshot(doc(db,COLL,k),
@@ -1451,6 +1829,7 @@ export default function App(){
     indicadores:   <Indicadores   data={data}/>,
     requests:      <Requests      user={user} data={data} setData={setData}/>,
     notifications: <Notifications user={user} data={data}/>,
+    checklist:     <Checklist     user={user} data={data} setData={setData}/>,
     reports:       <Reports       data={data}/>,
     deviaciones:   <DeviationReports user={user} data={data} setData={setData}/>,
     users:         <UsersPage     data={data} setData={setData}/>,
