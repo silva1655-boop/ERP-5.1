@@ -92,7 +92,7 @@ const CHECKLIST_TEMPLATES = {
   },
   grua_horquilla:{
     label:"Grúa Horquilla",
-    equipTypes:["Montacargas"],
+    equipTypes:["Grúa Portuaria"],
     sections:[
       {label:"Motor", items:[
         {id:"gh_fugas",       name:"Fugas de aceite, líquido o aire",      method:"Visualmente bajo la máquina",                  icon:"💧"},
