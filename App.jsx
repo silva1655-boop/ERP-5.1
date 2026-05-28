@@ -4,7 +4,8 @@ import {
   Users, FileText, Bell, LogOut, ChevronRight, Plus, X,
   Calendar, Zap, Shield, Search, ClipboardList, AlertCircle,
   Check, RefreshCw, Activity, ArrowRight, Edit2, Trash2,
-  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge, Key, FileWarning
+  TrendingUp, Layers, Info, Wifi, WifiOff, Gauge, Key, FileWarning,
+  Printer, Filter, Eye, ChevronDown
 } from "lucide-react";
 import { db } from "./firebase.js";
 import { doc, setDoc, onSnapshot, getDoc } from "firebase/firestore";
@@ -1188,6 +1189,76 @@ function Indicadores({data}){
   );
 }
 
+// ─── PRINT OT ─────────────────────────────────────────────────────────────────
+function printOT(ot, req, equipList, usersList) {
+  const eq = equipList.find(e => e.id === ot.equipId) || equipList.find(e => e.id === req?.equipId);
+  const mec = usersList.find(u => u.id === ot.assignedTo);
+  const reqBy = usersList.find(u => u.id === req?.requestedBy);
+  const esc = s => String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const SUBSIST = {electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"};
+  const w = window.open("","_blank","width=900,height=700");
+  w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>OT ${esc(ot.code)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;background:#fff;}
+    .header{background:#002060;color:#fff;padding:20px 32px;display:flex;align-items:center;gap:20px;}
+    .header-title{font-size:22px;font-weight:bold;letter-spacing:1px;}
+    .header-sub{font-size:13px;opacity:0.8;margin-top:4px;}
+    .body{padding:24px 32px;}
+    h2{font-size:14px;font-weight:bold;color:#002060;border-bottom:2px solid #002060;padding-bottom:4px;margin:18px 0 10px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+    th{background:#e8f2fb;color:#002060;font-size:11px;text-align:left;padding:6px 10px;border:1px solid #c0d8ee;}
+    td{padding:6px 10px;border:1px solid #dde6f0;vertical-align:top;}
+    .label{font-weight:bold;color:#555;width:38%;}
+    .section{background:#f8fafd;border:1px solid #dde6f0;border-radius:6px;padding:12px 16px;margin-bottom:12px;}
+    .badge-high{background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:12px;font-weight:bold;font-size:11px;}
+    .badge-med{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-weight:bold;font-size:11px;}
+    .badge-low{background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:12px;font-weight:bold;font-size:11px;}
+    .footer{margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:60px;padding:0 20px;}
+    .sig-line{border-top:1.5px solid #333;margin-top:48px;padding-top:6px;font-size:11px;text-align:center;color:#555;}
+    @media print{body{margin:0;}button{display:none;}}
+  </style></head><body>
+  <div class="header">
+    <div>
+      <div class="header-title">NAVIMAG FERRIES</div>
+      <div class="header-sub">Orden de Trabajo — Departamento de Mantenimiento</div>
+    </div>
+    <div style="margin-left:auto;text-align:right;">
+      <div style="font-size:18px;font-weight:bold;">${esc(ot.code)}</div>
+      <div style="font-size:11px;opacity:0.7;">${new Date(ot.createdAt).toLocaleDateString("es-CL")}</div>
+    </div>
+  </div>
+  <div class="body">
+    <h2>Detalles de la Orden de Trabajo</h2>
+    <table>
+      <tr><td class="label">Código OT</td><td><strong>${esc(ot.code)}</strong></td><td class="label">Tipo</td><td>${esc(ot.type)}</td></tr>
+      <tr><td class="label">Equipo</td><td>${esc(eq?.code||"")} — ${esc(eq?.name||"")}</td><td class="label">Ubicación</td><td>${esc(eq?.location||"")}</td></tr>
+      <tr><td class="label">Prioridad</td><td><span class="${ot.priority==="alta"?"badge-high":ot.priority==="media"?"badge-med":"badge-low"}">${esc(ot.priority?.toUpperCase())}</span></td><td class="label">Estado</td><td>${esc(ot.status)}</td></tr>
+      <tr><td class="label">Fecha Creación</td><td>${new Date(ot.createdAt).toLocaleDateString("es-CL")}</td><td class="label">Fecha Programada</td><td>${ot.scheduledDate?new Date(ot.scheduledDate).toLocaleDateString("es-CL"):"—"}</td></tr>
+      <tr><td class="label">Horas Estimadas</td><td>${esc(ot.estimatedHours)}h</td><td class="label">Horas Reales</td><td>${ot.actualHours!=null?esc(ot.actualHours)+"h":"—"}</td></tr>
+    </table>
+    <h2>Mecánico Responsable</h2>
+    <div class="section">${esc(mec?.name||"Sin asignar")}</div>
+    ${ot.description?`<h2>Descripción / Trabajos a Realizar</h2><div class="section" style="white-space:pre-line;">${esc(ot.description)}</div>`:""}
+    ${ot.observations?`<h2>Observaciones</h2><div class="section" style="white-space:pre-line;">${esc(ot.observations)}</div>`:""}
+    ${Array.isArray(ot.parts)&&ot.parts.length>0?`<h2>Repuestos / Partes</h2><div class="section">${ot.parts.map(p=>`<div>• ${esc(p)}</div>`).join("")}</div>`:""}
+    ${req?`<h2>Solicitud de Origen</h2>
+    <table>
+      <tr><td class="label">Solicitante</td><td>${esc(reqBy?.name||"—")}</td><td class="label">Fecha Solicitud</td><td>${req.requestedAt?new Date(req.requestedAt).toLocaleDateString("es-CL"):"—"}</td></tr>
+      ${req.subsistema?`<tr><td class="label">Subsistema</td><td>${esc(SUBSIST[req.subsistema]||req.subsistema)}</td><td class="label">Componente</td><td>${esc(req.componente||"—")}</td></tr>`:""}
+      ${req.source==="checklist"?`<tr><td class="label">Origen</td><td colspan="3">Checklist Pre-operacional</td></tr>`:""}
+    </table>`:""}
+    <div class="footer">
+      <div><div class="sig-line">Mecánico Responsable<br/><span style="font-size:10px;color:#999;">Nombre y Firma</span></div></div>
+      <div><div class="sig-line">Supervisor<br/><span style="font-size:10px;color:#999;">Nombre y Firma</span></div></div>
+    </div>
+  </div>
+  </body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
 // ─── REQUESTS ────────────────────────────────────────────────────────────────
 function Requests({user,data,setData}){
   const {requests,equip,users,wos}=data;
@@ -1195,8 +1266,17 @@ function Requests({user,data,setData}){
   const [form,setForm]=useState({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});
   const [showCLProc,setShowCLProc]=useState(false);
   const [clProc,setClProc]=useState({req:null,priority:"media",subsistema:"",componente:"",description:""});
+  const [selReq,setSelReq]=useState(null);
+  const [flt,setFlt]=useState({userId:"",status:"",priority:""});
   const canCreate=user.role==="operaciones"||user.role==="supervisor";
   const visible=(user.role==="supervisor"||user.role==="operaciones")?requests:requests.filter(r=>r.requestedBy===user.id);
+  const filtered=visible.filter(r=>{
+    if(flt.userId&&r.requestedBy!==flt.userId)return false;
+    if(flt.status&&r.status!==flt.status)return false;
+    if(flt.priority&&r.priority!==flt.priority)return false;
+    return true;
+  });
+  const uniqueRequesters=[...new Map(visible.map(r=>r.requestedBy).filter(Boolean).map(id=>[id,users.find(u=>u.id===id)])).values()].filter(Boolean);
   const createReq=()=>{if(!form.equipId||!form.title)return;const nr={id:uid(),...form,status:"pendiente",source:"solicitud",requestedBy:user.id,requestedAt:new Date().toISOString(),approvedBy:null,otId:null};const updated=[...requests,nr];setData(d=>({...d,requests:updated}));saveData("requests",updated);setShowForm(false);setForm({equipId:"",title:"",description:"",priority:"media",subsistema:"",componente:""});};
   const approve=req=>{const eq=equip.find(e=>e.id===req.equipId);const priority=req.priority==="alta"||eq?.criticality==="A"?"alta":req.priority;const mec=users.find(u=>u.role==="mecanico");const isInsp=req.source==="inspeccion";const newOT={id:uid(),code:nextOTCode(wos),type:"correctivo",equipId:req.equipId,planId:null,title:`${isInsp?"Inspección":"Reparación"} ${eq?.name||""} - ${req.title}`,priority,status:"asignada",assignedTo:mec?.id||"",createdAt:new Date().toISOString(),scheduledDate:new Date().toISOString().slice(0,10),estimatedHours:priority==="alta"?4:2,actualHours:null,description:req.description,observations:"",parts:[],source:req.source||"solicitud",reqId:req.id};const updW=[...wos,newOT];const updR=requests.map(r=>r.id===req.id?{...r,status:"aprobada",approvedBy:user.id,otId:newOT.id}:r);setData(d=>({...d,wos:updW,requests:updR}));saveData("workOrders",updW);saveData("requests",updR);alert(`✅ OT ${newOT.code} generada — Prioridad ${priority.toUpperCase()}`);};
   const reject=req=>{const updated=requests.map(r=>r.id===req.id?{...r,status:"rechazada",approvedBy:user.id}:r);setData(d=>({...d,requests:updated}));saveData("requests",updated);};
