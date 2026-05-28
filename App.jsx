@@ -845,7 +845,13 @@ function Equipment({user,data,setData}){
 const EMPTY_TPL={name:"",frequency:"",estimatedHours:"",technician:"",tasks:""};
 const EMPTY_PLAN_FORM={equipId:"",name:"",frequency:"",lastHorometro:"",estimatedHours:"",technician:"",tasks:""};
 function Plans({user,data,setData}){
-  const {plans,equip,users,wos,taskTemplates}=data;
+  const {plans,equip,users,wos,taskTemplates,checklists}=data;
+  const liveHours=(equipId)=>{
+    const latestCL=(checklists||[])
+      .filter(c=>c.equipId===equipId)
+      .sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))[0];
+    return latestCL?latestCL.horometro:(equip.find(e=>e.id===equipId)?.hours||0);
+  };
   const [tab,setTab]=useState("planes");
   const [showTplForm,setShowTplForm]=useState(false);
   const [showAssign,setShowAssign]=useState(null);
@@ -927,56 +933,87 @@ function Plans({user,data,setData}){
       {tab==="planes"&&(
         <>
           {plans.length===0&&<div className="text-center py-16 text-gray-400"><Gauge size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea una plantilla y asígnala a equipos, o crea un plan individual</p></div>}
-          <div className="space-y-4">
-            {plans.map(p=>{
-              const eq=equip.find(e=>e.id===p.equipId);const tech=users.find(u=>u.id===p.technician);
-              const linked=wos.filter(w=>w.planId===p.id);
-              const curH=eq?.hours||0;
-              const range=p.horometroTarget-p.lastHorometro;
-              const pct=range>0?Math.min(100,Math.max(0,((curH-p.lastHorometro)/range)*100)):100;
-              const hl=p.horometroTarget-curH;
-              const overdue=curH>=p.horometroTarget;
-              const soon=!overdue&&hl<=(p.frequency||0)*0.1;
-              return(
-                <div key={p.id} className={`${card} p-5 hover:shadow-md transition`}>
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className="font-mono font-bold text-xs" style={{color:NV.blue}}>{eq?.code}</span>
-                        <span className="text-gray-600 text-xs font-medium">{eq?.name}</span>
-                        <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${overdue?"text-red-700 bg-red-50 border-red-200":soon?"text-amber-700 bg-amber-50 border-amber-200":"text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
-                          {overdue?"VENCIDO":soon?`PRÓXIMO (+${Math.round(hl)}h)`:`En ${Math.round(hl)}h`}
-                        </span>
+          {(()=>{
+            // Group plans by equipId
+            const equipIds=[...new Set(plans.map(p=>p.equipId))];
+            return(
+              <div className="space-y-6">
+                {equipIds.map(equipId=>{
+                  const eq=equip.find(e=>e.id===equipId);
+                  const groupPlans=plans.filter(p=>p.equipId===equipId);
+                  const curH=liveHours(equipId);
+                  const hasChecklistReading=(checklists||[]).some(c=>c.equipId===equipId);
+                  const groupHasOverdue=groupPlans.some(p=>curH>=p.horometroTarget);
+                  const groupHasSoon=!groupHasOverdue&&groupPlans.some(p=>{const hl=p.horometroTarget-curH;return hl<=(p.frequency||250)*0.15&&curH<p.horometroTarget;});
+                  return(
+                    <div key={equipId}>
+                      {/* Equipment group header */}
+                      <div className="flex items-center gap-2.5 mb-2 px-1">
+                        {groupHasOverdue&&<span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0"/>}
+                        {!groupHasOverdue&&groupHasSoon&&<span className="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0"/>}
+                        {!groupHasOverdue&&!groupHasSoon&&<span className="w-2.5 h-2.5 rounded-full bg-emerald-400 flex-shrink-0"/>}
+                        <span className="font-mono font-bold text-sm" style={{color:NV.blue}}>{eq?.code}</span>
+                        <span className="font-semibold text-gray-700 text-sm">{eq?.name}</span>
+                        <span className="text-gray-400 text-xs flex items-center gap-1"><Gauge size={11}/>{curH.toLocaleString()}h actual</span>
+                        {hasChecklistReading
+                          ?<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-emerald-700 bg-emerald-50 border-emerald-200">Fuente: Checklist</span>
+                          :<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-gray-500 bg-gray-50 border-gray-200">Fuente: Manual</span>
+                        }
                       </div>
-                      <p className="text-gray-800 font-semibold text-sm mb-3">{p.name}</p>
-                      <div className="mb-3">
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>{p.lastHorometro.toLocaleString()}h</span>
-                          <span className="font-semibold" style={{color:overdue?"#b91c1c":NV.navy}}>Actual: {curH.toLocaleString()}h</span>
-                          <span>Meta: {p.horometroTarget.toLocaleString()}h</span>
-                        </div>
-                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${overdue?"bg-red-500":soon?"bg-amber-400":"bg-emerald-500"}`} style={{width:`${pct}%`}}/>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">Frecuencia: cada {p.frequency}h · {linked.length} OT historial</p>
+                      <div className="space-y-3 pl-5 border-l-2 ml-1" style={{borderColor:groupHasOverdue?"#ef4444":groupHasSoon?"#f59e0b":"#d1d5db"}}>
+                        {groupPlans.map(p=>{
+                          const tech=users.find(u=>u.id===p.technician);
+                          const linked=wos.filter(w=>w.planId===p.id);
+                          const currentH=liveHours(p.equipId);
+                          const hoursLeft=p.horometroTarget-currentH;
+                          const overdue=currentH>=p.horometroTarget;
+                          const soon=!overdue&&hoursLeft<=(p.frequency||250)*0.15;
+                          const range=p.horometroTarget-p.lastHorometro;
+                          const pct=range>0?Math.min(100,Math.max(0,((currentH-p.lastHorometro)/range)*100)):100;
+                          return(
+                            <div key={p.id} className={`${card} p-4 hover:shadow-md transition`}>
+                              <div className="flex items-start gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                    {overdue&&<span className="px-2 py-0.5 rounded-full border text-xs font-bold text-red-700 bg-red-50 border-red-200">VENCIDO</span>}
+                                    {soon&&!overdue&&<span className="px-2 py-0.5 rounded-full border text-xs font-bold text-amber-700 bg-amber-50 border-amber-200">PRÓXIMO</span>}
+                                    {!overdue&&!soon&&<span className="px-2 py-0.5 rounded-full border text-xs font-bold text-emerald-700 bg-emerald-50 border-emerald-200">En {Math.round(hoursLeft)}h</span>}
+                                  </div>
+                                  <p className="text-gray-800 font-semibold text-sm mb-3">{p.name}</p>
+                                  <div className="mb-3">
+                                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                      <span>{p.lastHorometro.toLocaleString()}h</span>
+                                      <span className="font-semibold" style={{color:overdue?"#b91c1c":NV.navy}}>Actual: {currentH.toLocaleString()}h</span>
+                                      <span>Meta: {p.horometroTarget.toLocaleString()}h</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all ${overdue?"bg-red-500":soon?"bg-amber-400":"bg-emerald-500"}`} style={{width:`${pct}%`}}/>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">Frecuencia: cada {p.frequency}h · {linked.length} OT historial</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                                    <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
+                                    {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
+                                  </div>
+                                  {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
+                                </div>
+                                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                                  {user.role==="supervisor"&&<>
+                                    <button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>
+                                    <button onClick={()=>deletePlan(p.id)} className="text-xs text-gray-300 hover:text-red-500 transition p-1"><Trash2 size={13}/></button>
+                                  </>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-                        <span className="flex items-center gap-1"><Clock size={10}/>{p.estimatedHours}h est.</span>
-                        {tech&&<span className="flex items-center gap-1"><Users size={10}/>{tech.name}</span>}
-                      </div>
-                      {Array.isArray(p.tasks)&&p.tasks.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{p.tasks.map((t,i)=><span key={i} className="text-xs border px-2 py-0.5 rounded-full" style={{background:NV.light,borderColor:"#BFD9F2",color:NV.navy}}>{t}</span>)}</div>}
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      {user.role==="supervisor"&&<>
-                        <button onClick={()=>generateOT(p)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium text-white" style={{background:NV.blue}}><Zap size={12}/>Generar OT</button>
-                        <button onClick={()=>deletePlan(p.id)} className="text-xs text-gray-300 hover:text-red-500 transition p-1"><Trash2 size={13}/></button>
-                      </>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </>
       )}
 
@@ -1292,117 +1329,174 @@ function Requests({user,data,setData}){
     setShowCLProc(false);
     alert("✅ Solicitud enviada al Supervisor para su aprobación y asignación de OT");
   };
+  const SUBSIST_MAP={electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"};
+  const DEV_TYPE_MAP={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía Detectada",desgaste:"Desgaste / Deterioro",otro:"Otro"};
   return(
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
-        <div><h1 className="text-gray-900 font-bold text-xl">Solicitudes de Reparación</h1><p className="text-gray-500 text-sm">{visible.length} solicitudes</p></div>
+        <div><h1 className="text-gray-900 font-bold text-xl">Solicitudes de Reparación</h1><p className="text-gray-500 text-sm">{filtered.length} de {visible.length} solicitudes</p></div>
         {canCreate&&<button onClick={()=>setShowForm(true)} style={{background:NV.blue}} className={btnPrimary}><Plus size={15}/>Nueva Solicitud</button>}
       </div>
+
+      {/* ── Filter Bar ── */}
+      <div className="flex gap-2 mb-5 flex-wrap items-center">
+        <Filter size={14} className="text-gray-400 flex-shrink-0"/>
+        <select value={flt.userId} onChange={e=>setFlt(f=>({...f,userId:e.target.value}))} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-blue-400">
+          <option value="">Solicitante: Todos</option>
+          {uniqueRequesters.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+        <select value={flt.status} onChange={e=>setFlt(f=>({...f,status:e.target.value}))} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-blue-400">
+          <option value="">Estado: Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="aprobada">Aprobada</option>
+          <option value="rechazada">Rechazada</option>
+          <option value="revisado">Revisado</option>
+          <option value="completada">Completada</option>
+        </select>
+        <select value={flt.priority} onChange={e=>setFlt(f=>({...f,priority:e.target.value}))} className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-blue-400">
+          <option value="">Prioridad: Todas</option>
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baja">Baja</option>
+        </select>
+        {(flt.userId||flt.status||flt.priority)&&(
+          <button onClick={()=>setFlt({userId:"",status:"",priority:""})} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 bg-red-50 px-2.5 py-1.5 rounded-lg transition"><X size={11}/>Limpiar</button>
+        )}
+      </div>
+
       {visible.length===0&&<div className="text-center py-16 text-gray-400"><Bell size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin solicitudes</p></div>}
-      <div className="space-y-4">
-        {visible.map(r=>{
+      {filtered.length===0&&visible.length>0&&<div className="text-center py-10 text-gray-400"><Filter size={32} className="mx-auto mb-2 text-gray-300"/><p className="text-sm">Sin resultados para los filtros seleccionados</p></div>}
+      <div className="space-y-3">
+        {filtered.map(r=>{
           const eq=equip.find(e=>e.id===r.equipId);const reqBy=users.find(u=>u.id===r.requestedBy);const linkedOT=wos.find(w=>w.id===r.otId);
-          const SUBSIST={electrico:"Eléctrico",hidraulico:"Hidráulico",mecanico:"Mecánico",neumatico:"Neumático"};
-          const DEV_TYPE={fuera_de_programa:"Fuera de Programa",anomalia:"Anomalía Detectada",desgaste:"Desgaste / Deterioro",otro:"Otro"};
           return(
             <div key={r.id} className={`bg-white border rounded-xl shadow-sm overflow-hidden ${r.status==="pendiente"?r.source==="inspeccion"?"border-amber-300":"border-blue-300":r.status==="completada"?"border-emerald-300":"border-gray-200"}`}>
               {/* ── Header ── */}
-              <div className={`px-5 py-3 border-b flex items-center justify-between gap-3 flex-wrap ${r.status==="completada"?"bg-emerald-50/60 border-emerald-100":"bg-gray-50/60 border-gray-100"}`}>
-                <div className="flex items-center gap-2 flex-wrap">
+              <div className={`px-4 py-2.5 border-b flex items-center justify-between gap-2 flex-wrap ${r.status==="completada"?"bg-emerald-50/60 border-emerald-100":"bg-gray-50/60 border-gray-100"}`}>
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge s={r.status}/>
                   <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
                   {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
                   {r.source==="checklist"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-green-700 bg-green-50 border-green-200">Checklist Pre-op</span>}
-                  {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE[r.type]||r.type}</span>}
-                  {eq?.criticality&&<span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${CRIT_CLS[eq.criticality]}`}>Equipo {CRIT_LABEL[eq.criticality]}</span>}
+                  {r.type&&r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-medium text-gray-600 bg-white border-gray-200">{DEV_TYPE_MAP[r.type]||r.type}</span>}
                 </div>
-                {r.status==="pendiente"&&(
-                  <>
-                    {user.role==="operaciones"&&r.source==="checklist"&&(
-                      <div className="flex gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button onClick={()=>setSelReq(r)} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition"><Eye size={11}/>Ver Detalle</button>
+                  {r.status==="pendiente"&&(
+                    <>
+                      {user.role==="operaciones"&&r.source==="checklist"&&(
                         <button onClick={()=>openCLProc(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:"#16a34a"}}><ClipboardList size={12}/>Procesar</button>
-                      </div>
-                    )}
-                    {user.role==="supervisor"&&(
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
-                        {r.source==="inspeccion"
-                          ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
-                          :<button onClick={()=>reject(r)} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
-                        }
-                      </div>
-                    )}
-                  </>
-                )}
+                      )}
+                      {user.role==="supervisor"&&(
+                        <>
+                          <button onClick={()=>approve(r)} className="flex items-center gap-1.5 text-white text-xs px-3 py-1.5 rounded-lg hover:opacity-90 transition font-medium" style={{background:NV.blue}}><Check size={12}/>Aprobar + OT</button>
+                          {r.source==="inspeccion"
+                            ?<button onClick={()=>markRevised(r)} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs px-3 py-1.5 rounded-lg hover:bg-blue-100 transition font-medium"><Check size={12}/>Revisado</button>
+                            :<button onClick={()=>reject(r)} className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-1.5 rounded-lg hover:bg-red-100 transition font-medium"><X size={12}/>Rechazar</button>
+                          }
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* ── Body ── */}
-              <div className="p-5 space-y-3">
-                {/* Equipo */}
-                <div className="flex items-center gap-2">
-                  <Package size={13} className="text-gray-400 flex-shrink-0"/>
-                  <span className="text-gray-800 text-sm font-semibold">{eq?.name||"—"}</span>
-                  {eq?.code&&<span className="font-mono text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{eq.code}</span>}
-                  {eq?.location&&<span className="text-gray-400 text-xs">{eq.location}</span>}
+              {/* ── Compact Body ── */}
+              <div className="px-4 py-3 space-y-1.5">
+                {/* Equipment one-liner */}
+                <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                  <Package size={11} className="text-gray-400 flex-shrink-0"/>
+                  <span className="font-mono font-bold" style={{color:NV.blue}}>{eq?.code||"—"}</span>
+                  <span className="font-medium text-gray-700">{eq?.name||"—"}</span>
+                  {eq?.location&&<span className="text-gray-400">· {eq.location}</span>}
                 </div>
-
-                {/* Título / Falla */}
-                <div>
-                  <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-0.5">Falla Detectada</p>
-                  <p className="text-gray-900 font-bold text-sm">{r.title}</p>
-                </div>
-
-                {/* Subsistema + Componente */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Subsistema</p>
-                    <p className={`text-sm font-semibold ${r.subsistema?"text-gray-800":"text-gray-400"}`}>{SUBSIST[r.subsistema]||"—"}</p>
-                  </div>
-                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Componente en Falla</p>
-                    <p className={`text-sm font-semibold ${r.componente?"text-gray-800":"text-gray-400"}`}>{r.componente||"—"}</p>
-                  </div>
-                </div>
-
-                {/* Descripción */}
-                {r.description&&(
-                  <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                    <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Descripción de la Falla</p>
-                    <p className="text-gray-700 text-sm leading-relaxed">{r.description}</p>
+                {/* Title */}
+                <p className="text-gray-900 font-bold text-sm leading-tight">{r.title}</p>
+                {/* Subsistema + Componente compact grid */}
+                {(r.subsistema||r.componente)&&(
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <span className="text-gray-400">Subsistema: <span className="text-gray-600 font-medium">{SUBSIST_MAP[r.subsistema]||"—"}</span></span>
+                    <span className="text-gray-400">Componente: <span className="text-gray-600 font-medium">{r.componente||"—"}</span></span>
                   </div>
                 )}
-
-                {/* Meta: quién reportó y cuándo */}
+                {/* Truncated description */}
+                {r.description&&<p className="text-gray-500 text-xs leading-snug line-clamp-2">{r.description}</p>}
+                {/* Footer */}
                 <div className="flex items-center gap-1.5 text-xs text-gray-400 pt-1 border-t border-gray-100">
-                  <Users size={11}/>
-                  <span>Reportado por <span className="font-medium text-gray-600">{reqBy?.name||"—"}</span></span>
+                  <Users size={10}/>
+                  <span className="font-medium text-gray-500">{reqBy?.name||"—"}</span>
                   <span>·</span>
                   <span>{fmtDT(r.requestedAt)}</span>
+                  {linkedOT&&<><span>·</span><span className="text-emerald-600 font-semibold">{linkedOT.code}</span></>}
                 </div>
-
-                {/* OT vinculada */}
-                {linkedOT&&(
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold"><CheckCircle size={12}/>OT Generada: {linkedOT.code}</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Estado</span><div className="mt-0.5"><Badge s={linkedOT.status}/></div></div>
-                      <div><span className="text-gray-400 uppercase tracking-wide text-xs">Mecánico</span><p className="text-gray-700 font-medium mt-0.5">{users.find(u=>u.id===linkedOT.assignedTo)?.name||"—"}</p></div>
-                      {linkedOT.scheduledDate&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Programado</span><p className="text-gray-700 font-medium mt-0.5">{fmt(linkedOT.scheduledDate)}</p></div>}
-                      {linkedOT.actualHours&&<div><span className="text-gray-400 uppercase tracking-wide text-xs">Horas Reales</span><p className="text-emerald-700 font-bold mt-0.5">{linkedOT.actualHours}h</p></div>}
-                    </div>
-                    {linkedOT.observations&&(
-                      <div className="border-t border-emerald-100 pt-2">
-                        <p className="text-gray-400 uppercase tracking-wide text-xs mb-0.5">Observaciones del Mecánico</p>
-                        <p className="text-gray-700 text-xs leading-relaxed">{linkedOT.observations}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* ── Detail Modal ── */}
+      {selReq&&(()=>{
+        const r=selReq;
+        const eq=equip.find(e=>e.id===r.equipId);
+        const reqBy=users.find(u=>u.id===r.requestedBy);
+        const approvedByUser=users.find(u=>u.id===r.approvedBy);
+        const linkedOT=wos.find(w=>w.id===r.otId);
+        const mechanic=linkedOT?users.find(u=>u.id===linkedOT.assignedTo):null;
+        return(
+          <Modal title={`Solicitud — ${r.title}`} onClose={()=>setSelReq(null)} wide={true}>
+            <div className="space-y-4">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1.5">
+                <Badge s={r.status}/>
+                <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${PRI_CLS[r.priority]}`}>{r.priority.toUpperCase()}</span>
+                {r.source==="inspeccion"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-amber-700 bg-amber-50 border-amber-200">Reporte Inspección</span>}
+                {r.source==="checklist"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-green-700 bg-green-50 border-green-200">Checklist Pre-op</span>}
+                {r.source==="solicitud"&&<span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-blue-700 bg-blue-50 border-blue-200">Solicitud Manual</span>}
+              </div>
+              {/* Equipment */}
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                <p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Equipo</p>
+                <p className="text-gray-800 font-semibold text-sm">{eq?.code} — {eq?.name||"—"}</p>
+                {eq?.location&&<p className="text-gray-400 text-xs mt-0.5">{eq.location}</p>}
+              </div>
+              {/* Fields grid */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                {r.subsistema&&<div><p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Subsistema</p><p className="text-gray-700 font-semibold">{SUBSIST_MAP[r.subsistema]||r.subsistema}</p></div>}
+                {r.componente&&<div><p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Componente</p><p className="text-gray-700 font-semibold">{r.componente}</p></div>}
+                <div><p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Solicitante</p><p className="text-gray-700 font-semibold">{reqBy?.name||"—"}</p></div>
+                <div><p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Fecha Solicitud</p><p className="text-gray-700 font-semibold">{fmtDT(r.requestedAt)}</p></div>
+                {r.approvedBy&&<div><p className="text-gray-400 font-medium uppercase tracking-wide mb-0.5">Aprobado/Revisado por</p><p className="text-gray-700 font-semibold">{approvedByUser?.name||"—"}</p></div>}
+              </div>
+              {/* Description */}
+              {r.description&&<div className="bg-gray-50 border border-gray-100 rounded-lg p-3"><p className="text-gray-400 text-xs font-medium uppercase tracking-wide mb-1">Descripción de la Falla</p><p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">{r.description}</p></div>}
+              {/* Linked OT */}
+              {linkedOT&&(
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-emerald-700 text-sm font-bold"><CheckCircle size={14}/>OT Vinculada: {linkedOT.code}</div>
+                    <button onClick={()=>{setSelReq(null);printOT(linkedOT,r,equip,users);}} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white font-medium hover:opacity-90 transition" style={{background:NV.navy}}><Printer size={11}/>Imprimir OT</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Tipo</p><p className="text-gray-700 font-semibold capitalize">{linkedOT.type}</p></div>
+                    <div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Estado</p><Badge s={linkedOT.status}/></div>
+                    <div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Mecánico</p><p className="text-gray-700 font-semibold">{mechanic?.name||"—"}</p></div>
+                    <div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Fecha Programada</p><p className="text-gray-700 font-semibold">{fmt(linkedOT.scheduledDate)}</p></div>
+                    <div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Horas Estimadas</p><p className="text-gray-700 font-semibold">{linkedOT.estimatedHours}h</p></div>
+                    {linkedOT.actualHours&&<div><p className="text-gray-400 uppercase tracking-wide mb-0.5">Horas Reales</p><p className="text-emerald-700 font-bold">{linkedOT.actualHours}h</p></div>}
+                  </div>
+                  {linkedOT.observations&&<div className="border-t border-emerald-100 pt-2"><p className="text-gray-400 text-xs uppercase tracking-wide mb-0.5">Observaciones</p><p className="text-gray-700 text-xs leading-relaxed">{linkedOT.observations}</p></div>}
+                  {Array.isArray(linkedOT.parts)&&linkedOT.parts.length>0&&<div className="border-t border-emerald-100 pt-2"><p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Repuestos</p>{linkedOT.parts.map((p,i)=><p key={i} className="text-gray-700 text-xs">• {p}</p>)}</div>}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 mt-4">
+              {linkedOT&&<button onClick={()=>{setSelReq(null);printOT(linkedOT,r,equip,users);}} className="flex items-center gap-2 text-white font-semibold px-4 py-2 rounded-lg text-sm transition hover:opacity-90" style={{background:NV.navy}}><Printer size={14}/>Imprimir OT</button>}
+              <button onClick={()=>setSelReq(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg text-sm transition">Cerrar</button>
+            </div>
+          </Modal>
+        );
+      })()}
       {showCLProc&&clProc.req&&(
         <Modal title={`Procesar Checklist — ${equip.find(e=>e.id===clProc.req.equipId)?.code||""}`} onClose={()=>setShowCLProc(false)}>
           <div className="space-y-3">
@@ -1661,13 +1755,14 @@ function Checklist({user,data,setData}){
   const {checklists,equip,requests,users}=data;
   const allCL=checklists||[];
   const [editing,setEditing]=useState(false);
-  const [setup,setSetup]=useState({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+  const [setup,setSetup]=useState({operatorName:"",equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
   const [items,setItems]=useState([]);
   const [step,setStep]=useState(1);
 
   const tplEquip=type=>equip.filter(e=>CHECKLIST_TEMPLATES[type].equipTypes.includes(e.type));
 
   const startForm=()=>{
+    if(!setup.operatorName.trim()){alert("Ingresa el nombre del operador");return;}
     if(!setup.equipId||!setup.horometro)return;
     const tpl=CHECKLIST_TEMPLATES[setup.equipType];
     const flat=tpl.sections.flatMap(s=>s.items.map(it=>({...it,sectionLabel:s.label,status:null,note:""})));
@@ -1685,6 +1780,7 @@ function Checklist({user,data,setData}){
     const eq=equip.find(e=>e.id===setup.equipId);
     const newCL={
       id:uid(),type:setup.equipType,equipId:setup.equipId,operatorId:user.id,
+      operatorName:setup.operatorName,
       horometro:parseFloat(setup.horometro)||0,fuel:setup.fuel,
       items:items.map(it=>({id:it.id,name:it.name,sectionLabel:it.sectionLabel,status:it.status,note:it.note})),
       createdAt:new Date().toISOString(),hasIssues:issueItems.length>0,issueCount:issueItems.length
@@ -1693,7 +1789,7 @@ function Checklist({user,data,setData}){
     setData(d=>({...d,checklists:updC}));saveData("checklists",updC);
     if(issueItems.length>0){
       const now=new Date().toISOString();
-      const header=`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}`;
+      const header=`Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}\nOperador: ${setup.operatorName}`;
       const newSolicitudes=issueItems.map(it=>({
         id:uid(),
         title:`[${it.status==="malo"?"MALO":"REGULAR"}] ${it.name} — ${eq?.code}`,
@@ -1713,7 +1809,7 @@ function Checklist({user,data,setData}){
       setData(d=>({...d,requests:updR}));saveData("requests",updR);
     }
     setEditing(false);setStep(1);setItems([]);
-    setSetup({equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
+    setSetup({operatorName:"",equipType:"tracto",equipId:"",horometro:"",fuel:"1/2"});
     alert(`✅ Checklist guardado${issueItems.length>0?` · ${issueItems.length} solicitud(es) independientes enviadas a Operaciones.`:". Sin observaciones."}`);
   };
 
@@ -1750,7 +1846,7 @@ function Checklist({user,data,setData}){
                     </span>
                   </div>
                   <p className="text-gray-500 text-xs mt-1">{CHECKLIST_TEMPLATES[c.type]?.label||c.type} · {c.horometro.toLocaleString()}h · Comb: {c.fuel}</p>
-                  <p className="text-gray-400 text-xs">{fmtDT(c.createdAt)}{op?` · ${op.name}`:""}</p>
+                  <p className="text-gray-400 text-xs">{fmtDT(c.createdAt)}{op?` · ${op.name}`:""}{ c.operatorName&&c.operatorName!==op?.name?` · Op: ${c.operatorName}`:""}</p>
                   {c.hasIssues&&<div className="mt-2 space-y-0.5">
                     {c.items.filter(it=>it.status!=="bueno").map((it,i)=>(
                       <p key={i} className={`text-xs ${it.status==="malo"?"text-red-600":"text-amber-600"}`}>• {it.sectionLabel}: {it.name}{it.note?` — ${it.note}`:""}</p>
@@ -1775,6 +1871,10 @@ function Checklist({user,data,setData}){
           <div><h1 className="text-gray-900 font-bold text-xl">Nuevo Checklist</h1><p className="text-gray-500 text-sm">Paso 1 de 2 — Identificación del equipo</p></div>
         </div>
         <div className={`${card} p-5 space-y-4`}>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL OPERADOR *</label>
+            <input value={setup.operatorName} onChange={e=>setSetup(s=>({...s,operatorName:e.target.value}))} className={iCls} placeholder="Ingresa tu nombre completo"/>
+          </div>
           <div>
             <label className="text-gray-500 text-xs font-medium mb-2 block">TIPO DE EQUIPO</label>
             <div className="grid grid-cols-2 gap-2">
@@ -1812,9 +1912,9 @@ function Checklist({user,data,setData}){
               </div>
             </div>
           </div>
-          <button onClick={startForm} disabled={!setup.equipId||!setup.horometro}
+          <button onClick={startForm} disabled={!setup.operatorName.trim()||!setup.equipId||!setup.horometro}
             className="w-full py-3 rounded-xl text-white font-bold text-sm transition"
-            style={{background:(!setup.equipId||!setup.horometro)?"#9ca3af":NV.blue}}>
+            style={{background:(!setup.operatorName.trim()||!setup.equipId||!setup.horometro)?"#9ca3af":NV.blue}}>
             Iniciar Inspección →
           </button>
         </div>
