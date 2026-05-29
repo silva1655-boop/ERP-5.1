@@ -9,9 +9,24 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
     }
 
-    function belongsToCompany(companyId) {
+    function hasUserDoc(companyId) {
       return signedIn()
-        && userDoc(companyId).data.companyId == companyId
+        && exists(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
+    }
+
+    function userCompanyMatches(companyId) {
+      return userDoc(companyId).data.companyId == companyId
+        || userDoc(companyId).data.companyid == companyId;
+    }
+
+    function requestCompanyMatches(companyId) {
+      return request.resource.data.companyId == companyId
+        || request.resource.data.companyid == companyId;
+    }
+
+    function belongsToCompany(companyId) {
+      return hasUserDoc(companyId)
+        && userCompanyMatches(companyId)
         && userDoc(companyId).data.active == true;
     }
 
@@ -40,9 +55,11 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin(companyId);
 
       match /users/{userId} {
-        allow read: if canReadCompany(companyId) && (request.auth.uid == userId || isCompanyAdmin(companyId));
+        allow read: if signedIn()
+          && resource.data.uid == request.auth.uid;
+        allow read: if canReadCompany(companyId) && isCompanyAdmin(companyId);
         allow create, update, delete: if isCompanyAdmin(companyId)
-          && request.resource.data.companyId == companyId
+          && requestCompanyMatches(companyId)
           && request.resource.data.uid == userId;
       }
 

@@ -68,7 +68,9 @@ Campos mínimos:
 }
 ```
 
-5. Publica `firestore.rules` para restringir acceso por autenticación, empresa y rol.
+> Nota: si ya creaste perfiles usando `companyid` en minúscula, la app y las reglas actuales lo toleran para desbloquear el acceso, pero se recomienda agregar también `companyId` en camelCase al documento del usuario.
+
+5. Publica `firestore.rules` para restringir acceso por autenticación, empresa y rol. Esto es obligatorio para que el login pueda leer `companies/{companyId}/users/{uid}`.
 6. Configura reglas de Storage equivalentes para rutas `companies/{companyId}/...` antes de producción.
 
 ## Estructura de carpetas
