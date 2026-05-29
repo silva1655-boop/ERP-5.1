@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons/icon.svg'],
       manifest: {
-        name: 'MANTEK ERP — Navimag',
+        name: 'Mantek ERP SaaS',
         short_name: 'MANTEK ERP',
-        description: 'Sistema de gestión de mantenimiento Navimag Ferries',
+        description: 'Sistema SaaS de gestión de mantenimiento',
         theme_color: '#002060',
         background_color: '#002060',
         display: 'standalone',
