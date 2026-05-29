@@ -1,0 +1,160 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
+    }
+
+    function hasUserDoc(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId)/users/$(request.auth.uid));
+    }
+
+    function userCompanyMatches(companyId) {
+      return userDoc(companyId).data.companyId == companyId
+        || userDoc(companyId).data.companyid == companyId;
+    }
+
+    function requestCompanyMatches(companyId) {
+      return request.resource.data.companyId == companyId
+        || request.resource.data.companyid == companyId;
+    }
+
+    function belongsToCompany(companyId) {
+      return hasUserDoc(companyId)
+        && userCompanyMatches(companyId)
+        && userDoc(companyId).data.active == true;
+    }
+
+    function role(companyId) {
+      return userDoc(companyId).data.role;
+    }
+
+    function hasRole(companyId, roles) {
+      return belongsToCompany(companyId) && role(companyId) in roles;
+    }
+
+    function isSuperAdmin(companyId) {
+      return hasRole(companyId, ['superadmin']);
+    }
+
+    function isCompanyAdmin(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa']);
+    }
+
+    function canReadCompany(companyId) {
+      return belongsToCompany(companyId);
+    }
+
+    function canManageWorkOrders(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor']);
+    }
+
+    function canManageRequests(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa']);
+    }
+
+    function canApproveRequests(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor']);
+    }
+
+    function canCreateRequests(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'operaciones']);
+    }
+
+    function canCreateChecklists(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones', 'mecanico', 'operador']);
+    }
+
+    function canWriteCounter(companyId) {
+      return belongsToCompany(companyId)
+        && (
+          isCompanyAdmin(companyId)
+          || (request.resource.data.prefix == 'SOL' && role(companyId) == 'operaciones')
+          || (request.resource.data.prefix == 'CHK' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
+          || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) == 'supervisor')
+        );
+    }
+
+    match /companies/{companyId} {
+      allow read: if canReadCompany(companyId);
+      allow create, update, delete: if isSuperAdmin(companyId);
+
+      match /users/{userId} {
+        allow read: if signedIn()
+          && resource.data.uid == request.auth.uid;
+        allow read: if canReadCompany(companyId) && isCompanyAdmin(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId)
+          && requestCompanyMatches(companyId)
+          && request.resource.data.uid == userId;
+      }
+
+      match /equipment/{equipmentId} {
+        allow read: if canReadCompany(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
+      }
+
+      match /workOrders/{workOrderId} {
+        allow read: if canReadCompany(companyId);
+        allow create: if canManageWorkOrders(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+        allow update: if canManageWorkOrders(companyId)
+          || (hasRole(companyId, ['mecanico'])
+              && resource.data.assignedTo == request.auth.uid
+              && request.resource.data.assignedTo == resource.data.assignedTo);
+      }
+
+      match /requests/{requestId} {
+        allow read: if canReadCompany(companyId);
+        allow create: if canCreateRequests(companyId)
+          && request.resource.data.status == 'pendiente'
+          && request.resource.data.requestedById == request.auth.uid;
+        allow update: if canManageRequests(companyId) || canApproveRequests(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /checklists/{checklistId} {
+        allow read: if canReadCompany(companyId);
+        allow create: if canCreateChecklists(companyId)
+          && request.resource.data.operatorId == request.auth.uid;
+        allow update: if isCompanyAdmin(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /maintenancePlans/{planId} {
+        allow read: if canReadCompany(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
+      }
+
+      match /spareParts/{partId} {
+        allow read: if canReadCompany(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
+      }
+
+      match /settings/{settingId} {
+        allow read: if canReadCompany(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
+      }
+
+      match /counters/{counterName} {
+        allow read: if canReadCompany(companyId);
+        allow create, update: if canWriteCounter(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /auditLogs/{logId} {
+        allow read: if isCompanyAdmin(companyId) || canManageWorkOrders(companyId);
+        allow create: if belongsToCompany(companyId);
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
