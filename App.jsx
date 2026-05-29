@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   AlertTriangle, CheckCircle, Clock, Wrench, BarChart2, Package,
   Users, FileText, Bell, LogOut, ChevronRight, Plus, X,
   Calendar, Zap, Shield, Search, ClipboardList, AlertCircle,
   Check, RefreshCw, Activity, ArrowRight, Edit2, Trash2,
   TrendingUp, Layers, Info, Wifi, WifiOff, Gauge, Key, FileWarning,
-  Printer, Filter, Eye, ChevronDown
+  Printer, Filter, Eye, ChevronDown, Camera, Download, FileDown
 } from "lucide-react";
 import { db } from "./firebase.js";
 import { doc, setDoc, onSnapshot, getDoc } from "firebase/firestore";
@@ -149,6 +149,23 @@ const uid = () => Math.random().toString(36).slice(2,10);
 const nextOTCode = wos => `OT-${new Date().getFullYear()}-${String(wos.length+1).padStart(3,"0")}`;
 const CRIT_LABEL = { A:"Crítico", B:"Importante", C:"Rutinario" };
 
+// ─── CSV EXPORT UTILITY ──────────────────────────────────────────────────────
+function downloadCSV(filename, rows) {
+  if (!rows || rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const escape = v => {
+    const s = String(v == null ? "" : v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const lines = [headers.map(escape).join(","), ...rows.map(r => headers.map(h => escape(r[h])).join(","))];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── NAVIMAG COLORS ───────────────────────────────────────────────────────────
 // Primary navy: #002060  Secondary blue: #0055A4  Accent: #00AEEF
 const NV = {
@@ -210,6 +227,110 @@ function ModalActions({onSave,onCancel,label="Guardar"}){
     <div className="flex gap-2 mt-5">
       <button onClick={onSave}   style={{background:NV.blue}} className="flex-1 text-white font-semibold py-2.5 rounded-lg text-sm transition hover:opacity-90">{label}</button>
       <button onClick={onCancel} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg text-sm transition">Cancelar</button>
+    </div>
+  );
+}
+
+// ─── PHOTO PICKER ────────────────────────────────────────────────────────────
+function PhotoPicker({ photos = [], onChange, max = 3 }) {
+  const inputRef = useRef(null);
+  const compressImage = (file, cb) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 800;
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        cb(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleFile = e => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const remaining = max - photos.length;
+    files.slice(0, remaining).forEach(f => {
+      compressImage(f, b64 => onChange([...photos, b64]));
+    });
+    e.target.value = "";
+  };
+  const remove = idx => onChange(photos.filter((_, i) => i !== idx));
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {photos.map((src, i) => (
+          <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 group">
+            <img src={src} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => { const w = window.open("", "_blank"); w.document.write(`<img src="${src}" style="max-width:100%;"/>`); w.document.close(); }}/>
+            <button onClick={() => remove(i)} className="absolute top-0.5 right-0.5 bg-black/60 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><X size={10} className="text-white"/></button>
+          </div>
+        ))}
+        {photos.length < max && (
+          <button onClick={() => inputRef.current?.click()} className="w-16 h-16 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition">
+            <Camera size={16}/><span className="text-xs mt-0.5">Foto</span>
+          </button>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile}/>
+    </div>
+  );
+}
+
+// ─── SIGNATURE PAD ───────────────────────────────────────────────────────────
+function SignaturePad({ onSave, onCancel }) {
+  const canvasRef = useRef(null);
+  const drawing = useRef(false);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }, []);
+  const getPos = e => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  };
+  const onDown = e => {
+    e.preventDefault();
+    drawing.current = true;
+    const ctx = canvasRef.current.getContext("2d");
+    const { x, y } = getPos(e);
+    ctx.beginPath(); ctx.moveTo(x, y);
+  };
+  const onMove = e => {
+    e.preventDefault();
+    if (!drawing.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    const { x, y } = getPos(e);
+    ctx.lineTo(x, y); ctx.stroke();
+  };
+  const onUp = e => { e.preventDefault(); drawing.current = false; };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+  const save = () => onSave(canvasRef.current.toDataURL("image/png"));
+  return (
+    <div className="space-y-3">
+      <p className="text-gray-600 text-sm font-medium">Firma del responsable:</p>
+      <canvas ref={canvasRef} width={440} height={200}
+        className="w-full border border-gray-300 rounded-lg bg-white touch-none"
+        style={{ height: "200px", cursor: "crosshair" }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}/>
+      <div className="flex gap-2">
+        <button onClick={clear} className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">Limpiar</button>
+        <button onClick={save} className="flex-1 py-2 text-sm text-white rounded-lg font-semibold hover:opacity-90 transition" style={{ background: "#002060" }}>Guardar Firma</button>
+        <button onClick={onCancel} className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition">Cancelar</button>
+      </div>
     </div>
   );
 }
