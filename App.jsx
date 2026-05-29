@@ -181,7 +181,7 @@ const Badge=({s,label})=>{const c=ST[s]||{label:s,cls:"text-gray-600 bg-gray-100
 const ROLE_CFG={
   supervisor: {label:"Supervisor", color:"text-cyan-300",  bg:"bg-cyan-900/40",   icon:Shield,       nav:["dashboard","workorders","equipment","plans","indicadores","requests","checklist","deviaciones","reports","users"]},
   mecanico:   {label:"Mecánico",   color:"text-amber-300", bg:"bg-amber-900/30",  icon:Wrench,       nav:["dashboard","workorders","deviaciones","reports"]},
-  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","checklist","notifications"]},
+  operaciones:{label:"Operaciones",color:"text-sky-300",   bg:"bg-sky-900/30",    icon:Activity,     nav:["dashboard","requests","checklist","plans","notifications"]},
   operador:   {label:"Operador",   color:"text-green-300", bg:"bg-green-900/30",  icon:ClipboardList,nav:["dashboard","checklist","notifications"]},
 };
 
@@ -853,6 +853,7 @@ function Plans({user,data,setData}){
     return latestCL?latestCL.horometro:(equip.find(e=>e.id===equipId)?.hours||0);
   };
   const [tab,setTab]=useState("planes");
+  const [fltEquip,setFltEquip]=useState("");
   const [showTplForm,setShowTplForm]=useState(false);
   const [showAssign,setShowAssign]=useState(null);
   const [showPlanForm,setShowPlanForm]=useState(false);
@@ -932,10 +933,22 @@ function Plans({user,data,setData}){
 
       {tab==="planes"&&(
         <>
+          {/* Filter bar */}
+          <div className="flex items-center gap-3 mb-5 flex-wrap">
+            <Filter size={14} className="text-gray-400 flex-shrink-0"/>
+            <select value={fltEquip} onChange={e=>setFltEquip(e.target.value)}
+              className="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 text-xs focus:outline-none focus:border-blue-400 min-w-[200px]">
+              <option value="">Todos los equipos</option>
+              {[...new Set(plans.map(p=>p.equipId))].map(eqId=>{
+                const eq=equip.find(e=>e.id===eqId);
+                return eq?<option key={eqId} value={eqId}>{eq.code} — {eq.name}</option>:null;
+              })}
+            </select>
+            {fltEquip&&<button onClick={()=>setFltEquip("")} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 bg-red-50 px-2.5 py-1.5 rounded-lg transition"><X size={11}/>Limpiar</button>}
+          </div>
           {plans.length===0&&<div className="text-center py-16 text-gray-400"><Gauge size={40} className="mx-auto mb-3 text-gray-300"/><p className="font-medium">Sin planes de mantenimiento</p><p className="text-sm mt-1">Crea una plantilla y asígnala a equipos, o crea un plan individual</p></div>}
           {(()=>{
-            // Group plans by equipId
-            const equipIds=[...new Set(plans.map(p=>p.equipId))];
+            const equipIds=[...new Set(plans.map(p=>p.equipId))].filter(id=>!fltEquip||id===fltEquip);
             return(
               <div className="space-y-6">
                 {equipIds.map(equipId=>{
