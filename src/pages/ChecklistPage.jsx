@@ -1,320 +1,360 @@
-import { useState, useRef } from "react";
-import { Plus, Check, X, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, ClipboardList } from "lucide-react";
-import { Badge } from "../components/common/Badge";
-import { Modal, ModalActions } from "../components/common/Modal";
-import { NV, CHECKLIST_TEMPLATES, CL_STATUS, card, btnPrimary } from "../utils/constants";
-import { uid } from "../utils/helpers";
-import toast from "react-hot-toast";
+import { useState } from 'react';
+import { Plus, X, AlertTriangle, CheckCircle, FileDown, ArrowRight, FileWarning, Filter } from 'lucide-react';
+import { PhotoPicker } from '../components/common/PhotoPicker';
+import { SignaturePad } from '../components/common/SignaturePad';
+import { NV, CHECKLIST_TEMPLATES, CL_STATUS, card, btnPrimary, btnSecondary, iCls, sCls } from '../utils/constants';
+import { uid, fmtDT, downloadCSV } from '../utils/helpers';
+import toast from 'react-hot-toast';
 
 export function ChecklistPage({ user, data, setData, saveData }) {
-  const { equip, checklists } = data;
+  const { checklists, equip, requests, users } = data;
   const allCL = checklists || [];
 
-  const [showForm, setShowForm] = useState(false);
-  const [step, setStep] = useState(1); // 1=select equip+type, 2=fill items
-  const [selEquip, setSelEquip] = useState("");
-  const [selType, setSelType] = useState("");
-  const [answers, setAnswers] = useState({});
-  const [notes, setNotes] = useState({});
-  const [globalNote, setGlobalNote] = useState("");
-  const [expandedSections, setExpandedSections] = useState({});
-  const [viewCL, setViewCL] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [setup, setSetup] = useState({ operatorName: "", equipType: "tracto", equipId: "", horometro: "", fuel: "1/2" });
+  const [items, setItems] = useState([]);
+  const [step, setStep] = useState(1);
+  const [showSig, setShowSig] = useState(false);
 
-  const myHistory = allCL.filter(c => c.operatorId === user.id).slice().reverse();
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const tplEquip = type => equip.filter(e => CHECKLIST_TEMPLATES[type]?.equipTypes?.includes(e.type));
 
-  const getTemplate = (equipId, typeKey) => {
-    if (typeKey && CHECKLIST_TEMPLATES[typeKey]) return CHECKLIST_TEMPLATES[typeKey];
-    const eq = equip.find(e => e.id === equipId);
-    if (!eq) return null;
-    for (const [key, tpl] of Object.entries(CHECKLIST_TEMPLATES)) {
-      if (tpl.equipTypes?.some(t => eq.type?.includes(t.split(" ")[0]))) return { ...tpl, key };
-    }
-    return CHECKLIST_TEMPLATES.tracto;
-  };
-
-  const startChecklist = () => {
-    if (!selEquip) { toast.error("Selecciona un equipo"); return; }
-    const tpl = getTemplate(selEquip, selType);
-    if (!tpl) { toast.error("No hay plantilla disponible para este equipo"); return; }
-    // Init all answers to empty
-    const initAnswers = {};
-    const initNotes = {};
-    tpl.sections.forEach(sec => sec.items.forEach(item => {
-      initAnswers[item.id] = "";
-      initNotes[item.id] = "";
-    }));
-    setAnswers(initAnswers);
-    setNotes(initNotes);
-    setExpandedSections({});
-    setGlobalNote("");
+  const startForm = () => {
+    if (!setup.operatorName.trim()) { toast.error("Ingresa el nombre del operador"); return; }
+    if (!setup.equipId || !setup.horometro) { toast.error("Completa equipo y horómetro"); return; }
+    const tpl = CHECKLIST_TEMPLATES[setup.equipType];
+    const flat = tpl.sections.flatMap(s => s.items.map(it => ({ ...it, sectionLabel: s.label, status: null, note: "", photos: [] })));
+    setItems(flat);
     setStep(2);
   };
 
-  const setAnswer = (itemId, val) => setAnswers(a => ({ ...a, [itemId]: val }));
-  const setNote = (itemId, val) => setNotes(n => ({ ...n, [itemId]: val }));
-  const toggleSection = key => setExpandedSections(s => ({ ...s, [key]: !s[key] }));
+  const setItemStatus = (id, status) => setItems(prev => prev.map(it => it.id === id ? { ...it, status } : it));
+  const setItemNote   = (id, note)   => setItems(prev => prev.map(it => it.id === id ? { ...it, note }   : it));
+  const setItemPhotos = (id, photos) => setItems(prev => prev.map(it => it.id === id ? { ...it, photos } : it));
 
-  const submitChecklist = () => {
-    const tpl = getTemplate(selEquip, selType);
-    const allItems = tpl.sections.flatMap(s => s.items);
-    const unanswered = allItems.filter(i => !answers[i.id]);
-    if (unanswered.length > 0) {
-      toast.error(`Faltan ${unanswered.length} ítems por responder`);
-      return;
-    }
-    const hasIssues = Object.values(answers).some(v => v === "malo" || v === "regular");
-    const issueCount = Object.values(answers).filter(v => v === "malo" || v === "regular").length;
-    const eq = equip.find(e => e.id === selEquip);
+  const issueItems  = items.filter(it => it.status === "malo" || it.status === "regular");
+  const pendingCount = items.filter(it => it.status === null).length;
 
+  const doSubmit = (signature) => {
+    const eq = equip.find(e => e.id === setup.equipId);
     const newCL = {
-      id: uid(),
-      equipId: selEquip,
-      operatorId: user.id,
-      operatorName: user.name,
-      type: selType || Object.keys(CHECKLIST_TEMPLATES).find(k => {
-        return CHECKLIST_TEMPLATES[k].equipTypes?.some(t => eq?.type?.includes(t.split(" ")[0]));
-      }) || "tracto",
-      answers,
-      notes,
-      globalNote,
-      hasIssues,
-      issueCount,
+      id: uid(), type: setup.equipType, equipId: setup.equipId,
+      operatorId: user.id, operatorName: setup.operatorName,
+      horometro: parseFloat(setup.horometro) || 0, fuel: setup.fuel,
+      items: items.map(it => ({ id: it.id, name: it.name, sectionLabel: it.sectionLabel, status: it.status, note: it.note, photos: it.photos || [] })),
       createdAt: new Date().toISOString(),
-      status: hasIssues ? "con_observaciones" : "ok",
+      hasIssues: issueItems.length > 0, issueCount: issueItems.length,
+      operatorSignature: signature || null,
     };
+    const updC = [...allCL, newCL];
+    setData(d => ({ ...d, checklists: updC }));
+    saveData("checklists", updC);
 
-    const updated = [...allCL, newCL];
-    setData(d => ({ ...d, checklists: updated }));
-    saveData("checklists", updated);
-
-    // If has issues, create a notification/request for supervisor
-    if (hasIssues) {
-      const newReq = {
+    if (issueItems.length > 0) {
+      const now = new Date().toISOString();
+      const header = `Inspección pre-operacional — ${new Date().toLocaleDateString("es-CL")}\nHorómetro: ${setup.horometro}h · Combustible: ${setup.fuel}\nOperador: ${setup.operatorName}`;
+      const newSolicitudes = issueItems.map(it => ({
         id: uid(),
-        code: `REQ-${Date.now()}`,
-        title: `Obs. Checklist — ${eq?.code || "Equipo"}: ${issueCount} ítems`,
-        description: `Checklist pre-operacional con ${issueCount} observación(es). ${globalNote ? "Nota: " + globalNote : ""}`,
-        equipId: selEquip,
+        title: `[${it.status === "malo" ? "MALO" : "REGULAR"}] ${it.name} — ${eq?.code}`,
+        equipId: setup.equipId,
+        subsistema: "",
+        componente: it.name,
+        description: `${header}\n\nSección: ${it.sectionLabel}\nEstado: ${it.status === "malo" ? "MALO ✗" : "REGULAR ~"}${it.note ? `\nNota del operador: ${it.note}` : ""}`,
+        priority: it.status === "malo" ? "alta" : "media",
         status: "pendiente",
-        priority: issueCount > 3 ? "alta" : "media",
         requestedBy: user.id,
-        requestedByName: user.name,
+        requestedAt: now,
         source: "checklist",
         checklistId: newCL.id,
-        createdAt: new Date().toISOString(),
-      };
-      const updReqs = [...(data.requests || []), newReq];
-      setData(d => ({ ...d, requests: updReqs }));
-      saveData("requests", updReqs);
-      toast.success(`Checklist guardado. Se creó una solicitud por ${issueCount} observación(es).`);
-    } else {
-      toast.success("Checklist completado sin observaciones");
+        checklistItemId: it.id,
+        photos: it.photos || [],
+      }));
+      const updR = [...(requests || []), ...newSolicitudes];
+      setData(d => ({ ...d, requests: updR }));
+      saveData("requests", updR);
     }
 
-    setShowForm(false);
-    setStep(1);
-    setSelEquip(""); setSelType("");
+    setEditing(false); setStep(1); setItems([]); setShowSig(false);
+    setSetup({ operatorName: "", equipType: "tracto", equipId: "", horometro: "", fuel: "1/2" });
+    toast.success(`Checklist guardado${issueItems.length > 0 ? ` · ${issueItems.length} solicitud(es) enviadas a Operaciones` : ". Sin observaciones"}`);
   };
 
-  const openNew = () => { setStep(1); setSelEquip(""); setSelType(""); setShowForm(true); };
+  const submit = () => {
+    if (pendingCount > 0) { toast.error(`Faltan ${pendingCount} ítem${pendingCount !== 1 ? "s" : ""} sin evaluar`); return; }
+    setShowSig(true);
+  };
 
-  const tpl = step === 2 ? getTemplate(selEquip, selType) : null;
+  const mine = (user.role === "supervisor" || user.role === "operaciones") ? allCL : allCL.filter(c => c.operatorId === user.id);
 
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-gray-900 font-bold text-xl">Checklist Pre-Operacional</h1>
-          <p className="text-gray-500 text-sm">{myHistory.filter(c => c.createdAt?.startsWith(thisMonth)).length} realizados este mes</p>
+  const exportCL = () => {
+    const rows = mine.map(c => {
+      const eq = equip.find(e => e.id === c.equipId);
+      const op = users?.find(u => u.id === c.operatorId);
+      return { "Equipo": eq?.code || "—", "Tipo": CHECKLIST_TEMPLATES[c.type]?.label || c.type, "Operador": c.operatorName || op?.name || "—", "Horómetro": c.horometro, "Combustible": c.fuel, "Fecha": fmtDT(c.createdAt), "Observaciones": c.issueCount || 0 };
+    });
+    downloadCSV(`checklists_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
+  // ── Pantalla de firma ────────────────────────────────────────────────────────
+  if (showSig) {
+    return (
+      <div className="p-6 max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <div>
+            <h1 className="text-gray-900 font-bold text-xl">Firma del Operador</h1>
+            <p className="text-gray-500 text-sm">Confirma la inspección con tu firma (opcional)</p>
+          </div>
         </div>
-        <button onClick={openNew} style={{ background: NV.blue }} className={btnPrimary}>
-          <Plus size={15}/>Nuevo Checklist
-        </button>
+        <div className={`${card} p-5`}>
+          <SignaturePad onSave={sig => doSubmit(sig)} onCancel={() => doSubmit(null)} />
+        </div>
       </div>
+    );
+  }
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className={`${card} p-4 text-center`}>
-          <p className="text-2xl font-bold" style={{ color: NV.navy }}>{myHistory.filter(c => c.createdAt?.startsWith(thisMonth)).length}</p>
-          <p className="text-gray-500 text-xs mt-1">Este Mes</p>
+  // ── Vista lista ──────────────────────────────────────────────────────────────
+  if (!editing) {
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-gray-900 font-bold text-xl">Checklist Pre-Operacional</h1>
+            <p className="text-gray-500 text-sm">Inspección diaria de equipos antes de operar</p>
+          </div>
+          <div className="flex gap-2">
+            {mine.length > 0 && (
+              <button onClick={exportCL} className={btnSecondary} style={{ borderColor: NV.blue, color: NV.blue, background: "white" }}>
+                <FileDown size={14} />Exportar
+              </button>
+            )}
+            {user.role === "operador" && (
+              <button onClick={() => setEditing(true)} style={{ background: NV.blue }} className={btnPrimary}>
+                <Plus size={15} />Nuevo Checklist
+              </button>
+            )}
+          </div>
         </div>
-        <div className={`${card} p-4 text-center`}>
-          <p className="text-2xl font-bold text-emerald-600">{myHistory.filter(c => !c.hasIssues && c.createdAt?.startsWith(thisMonth)).length}</p>
-          <p className="text-gray-500 text-xs mt-1">Sin Observaciones</p>
-        </div>
-        <div className={`${card} p-4 text-center`}>
-          <p className="text-2xl font-bold text-amber-600">{myHistory.filter(c => c.hasIssues && c.createdAt?.startsWith(thisMonth)).length}</p>
-          <p className="text-gray-500 text-xs mt-1">Con Observaciones</p>
-        </div>
-      </div>
 
-      {/* History */}
-      <div className={card}>
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="font-semibold text-sm" style={{ color: NV.navy }}>Mis Checklists Recientes</h2>
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {[
+            ["Total mes",  mine.filter(c => c.createdAt?.startsWith(thisMonth)).length,                        "text-gray-800"],
+            ["Sin obs.",   mine.filter(c => c.createdAt?.startsWith(thisMonth) && !c.hasIssues).length,        "text-emerald-600"],
+            ["Con obs.",   mine.filter(c => c.createdAt?.startsWith(thisMonth) &&  c.hasIssues).length,        "text-amber-600"],
+          ].map(([l, v, cl]) => (
+            <div key={l} className={`${card} p-4 text-center`}>
+              <p className={`text-2xl font-bold ${cl}`}>{v}</p>
+              <p className="text-gray-400 text-xs mt-1">{l}</p>
+            </div>
+          ))}
         </div>
-        {myHistory.length === 0 && (
-          <div className="p-8 text-center text-gray-400 text-sm">No has realizado ningún checklist aún</div>
+
+        {mine.length === 0 && (
+          <div className="text-center py-16 text-gray-400">
+            <CheckCircle size={40} className="mx-auto mb-3 text-gray-300" />
+            <p className="font-medium">Sin checklists registrados</p>
+            <p className="text-sm mt-1">Completa la inspección pre-operacional antes de operar el equipo</p>
+          </div>
         )}
-        <div className="divide-y divide-gray-100">
-          {myHistory.slice(0, 20).map(cl => {
-            const eq = equip.find(e => e.id === cl.equipId);
-            const tplInfo = CHECKLIST_TEMPLATES[cl.type];
+
+        <div className="space-y-3">
+          {[...mine].reverse().map(c => {
+            const eq = equip.find(e => e.id === c.equipId);
+            const op = users?.find(u => u.id === c.operatorId);
             return (
-              <div key={cl.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer" onClick={() => setViewCL(cl)}>
-                <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${cl.hasIssues ? "bg-amber-100" : "bg-emerald-100"}`}>
-                  {cl.hasIssues ? <AlertTriangle size={14} className="text-amber-600"/> : <CheckCircle size={14} className="text-emerald-600"/>}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{eq?.code || "?"} — {eq?.name}</p>
-                  <p className="text-xs text-gray-500">{tplInfo?.label || cl.type} · {new Date(cl.createdAt).toLocaleString("es-CL")}</p>
+              <div key={c.id} className={`${card} p-4 flex items-start gap-4`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border ${c.hasIssues ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}`}>
+                  {c.hasIssues ? <AlertTriangle size={18} /> : <CheckCircle size={18} />}
                 </div>
-                {cl.hasIssues
-                  ? <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">{cl.issueCount} obs.</span>
-                  : <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">OK</span>
-                }
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-bold text-xs" style={{ color: NV.blue }}>{eq?.code}</span>
+                    <span className="text-gray-600 text-xs">{eq?.name}</span>
+                    <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${c.hasIssues ? "text-amber-700 bg-amber-50 border-amber-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"}`}>
+                      {c.hasIssues ? `${c.issueCount} observación(es)` : "Sin observaciones"}
+                    </span>
+                    {c.operatorSignature && (
+                      <span className="px-2 py-0.5 rounded-full border text-xs font-semibold text-blue-700 bg-blue-50 border-blue-200">Firmado</span>
+                    )}
+                  </div>
+                  <p className="text-gray-500 text-xs mt-1">{CHECKLIST_TEMPLATES[c.type]?.label || c.type} · {c.horometro?.toLocaleString()}h · Comb: {c.fuel}</p>
+                  <p className="text-gray-400 text-xs">{fmtDT(c.createdAt)}{op ? ` · ${op.name}` : ""}{c.operatorName && c.operatorName !== op?.name ? ` · Op: ${c.operatorName}` : ""}</p>
+                  {c.hasIssues && c.items && (
+                    <div className="mt-2 space-y-0.5">
+                      {c.items.filter(it => it.status !== "bueno").map((it, i) => (
+                        <p key={i} className={`text-xs ${it.status === "malo" ? "text-red-600" : "text-amber-600"}`}>
+                          • {it.sectionLabel}: {it.name}{it.note ? ` — ${it.note}` : ""}{it.photos?.length > 0 ? ` 📷${it.photos.length}` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <span className="text-gray-400 text-xs flex-shrink-0">{c.items?.length || 0} ítems</span>
               </div>
             );
           })}
         </div>
       </div>
+    );
+  }
 
-      {/* New Checklist Modal */}
-      {showForm && (
-        <Modal title={step === 1 ? "Nuevo Checklist — Selección" : `Checklist — ${equip.find(e => e.id === selEquip)?.code}`} onClose={() => { setShowForm(false); setStep(1); }} wide={step === 2}>
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
-                <select value={selEquip} onChange={e => setSelEquip(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm">
-                  <option value="">Seleccionar equipo...</option>
-                  {equip.filter(e => e.status === "operativo" || e.status === "mantenimiento").map(e => (
-                    <option key={e.id} value={e.id}>{e.code} — {e.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-gray-500 text-xs font-medium mb-1 block">TIPO DE CHECKLIST</label>
-                <select value={selType} onChange={e => setSelType(e.target.value)} className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-sm">
-                  <option value="">Auto-detectar según equipo</option>
-                  {Object.entries(CHECKLIST_TEMPLATES).map(([k, t]) => (
-                    <option key={k} value={k}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
-              <ModalActions onSave={startChecklist} onCancel={() => { setShowForm(false); setStep(1); }} label="Continuar →"/>
+  // ── Paso 1: Identificación del equipo ────────────────────────────────────────
+  if (step === 1) {
+    const avEquip = tplEquip(setup.equipType);
+    return (
+      <div className="p-6 max-w-lg">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => setEditing(false)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
+            <X size={16} className="text-gray-400" />
+          </button>
+          <div>
+            <h1 className="text-gray-900 font-bold text-xl">Nuevo Checklist</h1>
+            <p className="text-gray-500 text-sm">Paso 1 de 2 — Identificación del equipo</p>
+          </div>
+        </div>
+        <div className={`${card} p-5 space-y-4`}>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-1 block">NOMBRE DEL OPERADOR *</label>
+            <input value={setup.operatorName} onChange={e => setSetup(s => ({ ...s, operatorName: e.target.value }))} className={iCls} placeholder="Ingresa tu nombre completo" />
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-2 block">TIPO DE EQUIPO</label>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(CHECKLIST_TEMPLATES).map(([k, v]) => (
+                <button key={k} onClick={() => setSetup(s => ({ ...s, equipType: k, equipId: "" }))}
+                  className={`p-3 rounded-xl border-2 text-sm font-semibold transition text-left ${setup.equipType === k ? "text-blue-700 bg-blue-50" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                  style={setup.equipType === k ? { borderColor: NV.blue } : {}}>
+                  <p>{v.label}</p>
+                  <p className="text-xs font-normal text-gray-400 mt-0.5">{v.sections.reduce((a, s) => a + s.items.length, 0)} ítems · {v.sections.length} secciones</p>
+                </button>
+              ))}
             </div>
-          )}
-
-          {step === 2 && tpl && (
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-              {tpl.sections.map((sec, si) => {
-                const isOpen = expandedSections[si] !== false; // default open
-                const secItems = sec.items;
-                const secAnswered = secItems.filter(i => answers[i.id]).length;
-                const secIssues = secItems.filter(i => answers[i.id] === "malo" || answers[i.id] === "regular").length;
-                return (
-                  <div key={si} className="border border-gray-200 rounded-xl overflow-hidden">
-                    <button className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition" onClick={() => toggleSection(si)}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-gray-800">{sec.label}</span>
-                        <span className="text-xs text-gray-400">({secAnswered}/{secItems.length})</span>
-                        {secIssues > 0 && <span className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">{secIssues} obs.</span>}
-                      </div>
-                      {isOpen ? <ChevronUp size={14} className="text-gray-400"/> : <ChevronDown size={14} className="text-gray-400"/>}
+          </div>
+          <div>
+            <label className="text-gray-500 text-xs font-medium mb-1 block">EQUIPO</label>
+            <select value={setup.equipId} onChange={e => setSetup(s => ({ ...s, equipId: e.target.value }))} className={sCls}>
+              <option value="">Seleccionar equipo...</option>
+              {avEquip.map(e => <option key={e.id} value={e.id}>{e.name} ({e.code})</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">HORÓMETRO ACTUAL (h)</label>
+              <input type="number" value={setup.horometro} onChange={e => setSetup(s => ({ ...s, horometro: e.target.value }))} className={iCls} placeholder="ej: 1250" />
+            </div>
+            <div>
+              <label className="text-gray-500 text-xs font-medium mb-1 block">NIVEL COMBUSTIBLE</label>
+              <div className="flex gap-1">
+                {["E", "¼", "½", "¾", "F"].map((v, i) => {
+                  const vals = ["E", "1/4", "1/2", "3/4", "F"];
+                  const sel = setup.fuel === vals[i];
+                  return (
+                    <button key={v} onClick={() => setSetup(s => ({ ...s, fuel: vals[i] }))}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-bold transition ${sel ? "text-white border-transparent" : "bg-white border-gray-200 text-gray-500"}`}
+                      style={sel ? { background: NV.blue } : {}}>{v}
                     </button>
-                    {isOpen && (
-                      <div className="divide-y divide-gray-100">
-                        {secItems.map(item => (
-                          <div key={item.id} className="px-4 py-3">
-                            <div className="flex items-start gap-2 mb-2">
-                              <span className="text-base leading-none mt-0.5">{item.icon}</span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-800">{item.name}</p>
-                                <p className="text-xs text-gray-400">{item.method}</p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 mt-2">
-                              {["bueno","regular","malo"].map(v => (
-                                <button key={v} onClick={() => setAnswer(item.id, v)}
-                                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition ${answers[item.id] === v
-                                    ? v === "bueno" ? "bg-emerald-500 text-white border-emerald-500" : v === "regular" ? "bg-amber-400 text-white border-amber-400" : "bg-red-500 text-white border-red-500"
-                                    : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}>
-                                  {v === "bueno" ? "✓ Bueno" : v === "regular" ? "~ Regular" : "✗ Malo"}
-                                </button>
-                              ))}
-                            </div>
-                            {(answers[item.id] === "malo" || answers[item.id] === "regular") && (
-                              <input value={notes[item.id] || ""} onChange={e => setNote(item.id, e.target.value)}
-                                placeholder="Describe la observación..." className="mt-2 w-full border border-amber-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-amber-400"/>
-                            )}
-                          </div>
-                        ))}
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <button onClick={startForm}
+            disabled={!setup.operatorName.trim() || !setup.equipId || !setup.horometro}
+            className="w-full py-3 rounded-xl text-white font-bold text-sm transition"
+            style={{ background: (!setup.operatorName.trim() || !setup.equipId || !setup.horometro) ? "#9ca3af" : NV.blue }}>
+            Iniciar Inspección →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Paso 2: Llenado de ítems ─────────────────────────────────────────────────
+  const tpl = CHECKLIST_TEMPLATES[setup.equipType];
+  const eqSel = equip.find(e => e.id === setup.equipId);
+  const completedCount = items.filter(it => it.status !== null).length;
+  const pct = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+
+  return (
+    <div className="p-6 max-w-2xl pb-32">
+      <div className="flex items-center gap-3 mb-3">
+        <button onClick={() => setStep(1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 flex-shrink-0">
+          <ArrowRight size={16} className="text-gray-400 rotate-180" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-gray-900 font-bold text-lg">{tpl.label} — {eqSel?.code}</h1>
+          <p className="text-gray-500 text-xs">{completedCount}/{items.length} ítems · Horómetro: {setup.horometro}h · Op: {setup.operatorName}</p>
+        </div>
+        <span className="text-sm font-bold" style={{ color: pct === 100 ? "#16a34a" : NV.blue }}>{pct}%</span>
+      </div>
+      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-5">
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct === 100 ? "#16a34a" : NV.blue }} />
+      </div>
+
+      <div className="space-y-5">
+        {tpl.sections.map(section => (
+          <div key={section.label}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: NV.blue }}>{section.label}</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+            <div className="space-y-2">
+              {section.items.map(sItem => {
+                const it = items.find(x => x.id === sItem.id);
+                if (!it) return null;
+                const borderCl = it.status === "bueno" ? "border-l-emerald-400" : it.status === "malo" ? "border-l-red-400" : it.status === "regular" ? "border-l-amber-400" : "border-l-gray-200";
+                return (
+                  <div key={it.id} className={`${card} overflow-hidden border-l-4 ${borderCl}`}>
+                    <div className="p-3">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl flex-shrink-0 mt-0.5">{it.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-800 font-semibold text-sm">{it.name}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{it.method}</p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          {Object.entries(CL_STATUS).map(([s, { bg, lbl }]) => (
+                            <button key={s} onClick={() => setItemStatus(it.id, s)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition border ${it.status === s ? "text-white border-transparent" : "bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300"}`}
+                              style={it.status === s ? { background: bg } : {}}
+                              title={s.charAt(0).toUpperCase() + s.slice(1)}>{lbl}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    )}
+                      {(it.status === "regular" || it.status === "malo") && (
+                        <div className="mt-2 space-y-2">
+                          <input value={it.note} onChange={e => setItemNote(it.id, e.target.value)}
+                            className={iCls + " text-xs py-1.5"}
+                            placeholder="Nota / descripción del problema (opcional)..." />
+                          <PhotoPicker photos={it.photos || []} onChange={p => setItemPhotos(it.id, p)} max={2} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
-              <div>
-                <label className="text-gray-500 text-xs font-medium mb-1 block">NOTA GENERAL</label>
-                <textarea value={globalNote} onChange={e => setGlobalNote(e.target.value)} rows={3}
-                  placeholder="Observaciones generales..." className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"/>
-              </div>
-              <ModalActions onSave={submitChecklist} onCancel={() => { setShowForm(false); setStep(1); }} label="Enviar Checklist"/>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* View Checklist Modal */}
-      {viewCL && (
-        <Modal title={`Checklist — ${equip.find(e => e.id === viewCL.equipId)?.code}`} onClose={() => setViewCL(null)} wide>
-          <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-              <span className={`w-8 h-8 rounded-full flex items-center justify-center ${viewCL.hasIssues ? "bg-amber-100" : "bg-emerald-100"}`}>
-                {viewCL.hasIssues ? <AlertTriangle size={14} className="text-amber-600"/> : <CheckCircle size={14} className="text-emerald-600"/>}
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{viewCL.operatorName} · {new Date(viewCL.createdAt).toLocaleString("es-CL")}</p>
-                <p className="text-xs text-gray-500">{CHECKLIST_TEMPLATES[viewCL.type]?.label || viewCL.type} · {viewCL.hasIssues ? `${viewCL.issueCount} observaciones` : "Sin observaciones"}</p>
-              </div>
-            </div>
-            {CHECKLIST_TEMPLATES[viewCL.type]?.sections.map((sec, si) => (
-              <div key={si} className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 bg-gray-50">
-                  <p className="font-semibold text-sm text-gray-700">{sec.label}</p>
-                </div>
-                <div className="divide-y divide-gray-100">
-                  {sec.items.map(item => {
-                    const ans = viewCL.answers?.[item.id];
-                    const note = viewCL.notes?.[item.id];
-                    return (
-                      <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
-                        <span className="text-base">{item.icon}</span>
-                        <div className="flex-1 text-sm text-gray-700">{item.name}</div>
-                        <div className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${CL_STATUS[ans]?.cls || "text-gray-400 bg-gray-50 border-gray-200"}`}>
-                          {CL_STATUS[ans]?.lbl || "—"} {ans || "N/A"}
-                        </div>
-                        {note && <span className="text-xs text-amber-600 italic">"{note}"</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {viewCL.globalNote && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                <p className="text-xs font-medium text-amber-700 mb-1">Nota General:</p>
-                <p className="text-sm text-amber-800">{viewCL.globalNote}</p>
-              </div>
-            )}
-            <div className="flex justify-end">
-              <button onClick={() => setViewCL(null)} className="px-4 py-2 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition">Cerrar</button>
             </div>
           </div>
-        </Modal>
-      )}
+        ))}
+      </div>
+
+      <div className="fixed bottom-0 left-56 right-0 bg-white border-t border-gray-200 p-4 z-40">
+        {issueItems.length > 0 && (
+          <div className="rounded-lg p-2.5 mb-3 text-xs" style={{ background: NV.light, color: NV.navy, border: "1px solid #BFD9F2" }}>
+            <span className="font-semibold">{issueItems.length} obs. detectada(s) — se creará solicitud automática a Operaciones: </span>
+            {issueItems.map((it, i) => (
+              <span key={i} className={`font-medium ${it.status === "malo" ? "text-red-600" : "text-amber-600"}`}>{i > 0 ? ", " : ""}{it.name}</span>
+            ))}
+          </div>
+        )}
+        {pendingCount > 0 && (
+          <p className="text-amber-600 text-xs text-center mb-2">{pendingCount} ítem{pendingCount !== 1 ? "s" : ""} sin evaluar</p>
+        )}
+        <button onClick={submit} className="w-full py-3 rounded-xl text-white font-bold text-sm transition" style={{ background: NV.blue }}>
+          {issueItems.length > 0 ? `Enviar Checklist + ${issueItems.length} obs. a Operaciones` : "Enviar Checklist — Sin Observaciones"}
+        </button>
+      </div>
     </div>
   );
 }
