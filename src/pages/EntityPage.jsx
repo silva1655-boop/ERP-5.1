@@ -334,8 +334,12 @@ export default function EntityPage({ type }) {
     try {
       if (!payload.folio && config.folioPrefix) payload.folio = await generateFolio(companyId, config.folioPrefix);
       let savedId = editing?.id;
-      if (editing?.id) await updateDocument(companyId, config.collection, editing.id, payload, user);
-      else savedId = await createDocument(companyId, config.collection, payload, user);
+      if (editing?.id) {
+        await updateDocument(companyId, config.collection, editing.id, payload, user);
+        savedId = editing.id;
+      } else {
+        savedId = await createDocument(companyId, config.collection, payload, user);
+      }
       if (type === 'workOrders' && payload.status === 'programada' && payload.assignedToId) {
         await createWorkOrderAssignmentNotification(companyId, { id: savedId, ...payload }, user);
       }

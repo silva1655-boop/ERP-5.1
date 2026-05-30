@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import FirebaseConfigNotice from '../components/common/FirebaseConfigNotice';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { handleError } from '../utils/errorHandler';
@@ -12,10 +12,6 @@ export default function LoginPage() {
   const [error, setError] = useState(authError || '');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (authError) setError(authError);
-  }, [authError]);
 
   const submit = async event => {
     event.preventDefault();

@@ -25,22 +25,9 @@ export function AuthProvider({ children }) {
       return undefined;
     }
 
-    let resolvedInitialAuth = false;
-    const authTimeout = setTimeout(() => {
-      if (!resolvedInitialAuth) {
-        setError('Firebase Auth no respondió a tiempo. Se muestra login para reintentar la conexión.');
-        setFirebaseUser(null);
-        setProfile(null);
-        setCompanySettings(DEFAULT_COMPANY_SETTINGS);
-        setLoading(false);
-      }
-    }, 12000);
-
     const unsubscribe = onAuthStateChanged(auth, async user => {
       setLoading(true);
       setError('');
-      resolvedInitialAuth = true;
-      clearTimeout(authTimeout);
       try {
         setFirebaseUser(user);
         if (!user) {
@@ -48,19 +35,14 @@ export function AuthProvider({ children }) {
           setCompanySettings(DEFAULT_COMPANY_SETTINGS);
           return;
         }
-        const loadedProfile = await resolveUserProfile(user);
-        if (loadedProfile?.active === false || loadedProfile?.active === 'false') {
+        const loadedProfile = await resolveUserProfile(user.uid);
+        if (!loadedProfile?.active) {
           await authLogout();
           throw Object.assign(new Error('Usuario inactivo'), { code: 'auth/user-disabled' });
         }
         setProfile(loadedProfile);
-        try {
-          const settings = await getCompanySettings(loadedProfile.companyId);
-          setCompanySettings({ ...DEFAULT_COMPANY_SETTINGS, ...(settings || {}) });
-        } catch (settingsError) {
-          if (import.meta.env.DEV) console.warn('No se pudo cargar settings/general; se usarán valores por defecto.', settingsError);
-          setCompanySettings(DEFAULT_COMPANY_SETTINGS);
-        }
+        const settings = await getCompanySettings(loadedProfile.companyId);
+        setCompanySettings({ ...DEFAULT_COMPANY_SETTINGS, ...(settings || {}) });
       } catch (err) {
         setError(handleError(err));
         setProfile(null);
@@ -68,10 +50,7 @@ export function AuthProvider({ children }) {
         setLoading(false);
       }
     });
-    return () => {
-      clearTimeout(authTimeout);
-      unsubscribe();
-    };
+    return unsubscribe;
   }, []);
 
   const value = useMemo(() => ({
