@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePermissions } from '../hooks/usePermissions';
 import { createDocument, deleteDocument, generateFolio, updateDocument } from '../services/firestoreService';
+import { createWorkOrderAssignmentNotification } from '../services/notificationService';
 import { reviewRequest } from '../services/requestService';
 import { handleError } from '../utils/errorHandler';
 import { formatDate } from '../utils/dates';
@@ -57,14 +58,14 @@ const entityConfig = {
     collection: 'workOrders',
     search: ['folio', 'title', 'status', 'equipmentCode'],
     folioPrefix: 'OT',
-    required: ['title', 'equipmentId', 'priority', 'status'],
-    defaults: { type: 'correctiva', status: 'pendiente', priority: 'media', laborHours: 0, partsUsed: [], evidenceUrls: [], totalCost: 0 },
+    required: ['title', 'equipmentId', 'priority'],
+    defaults: { type: 'correctiva', status: 'en_planificacion', priority: 'media', laborHours: 0, partsUsed: [], evidenceUrls: [], totalCost: 0 },
     validate: validateWorkOrder,
     fields: [
       ['title', 'Título'], ['description', 'Descripción', 'textarea'], ['equipmentId', 'ID equipo'], ['equipmentCode', 'Código equipo'], ['type', 'Tipo', 'select', ['correctiva', 'preventiva', 'operacional']], ['status', 'Estado', 'select', WORK_ORDER_STATUS], ['priority', 'Prioridad', 'select', PRIORITIES], ['assignedTo', 'Técnico asignado'], ['requestedBy', 'Solicitado por'], ['dueDate', 'Fecha compromiso', 'date'], ['findings', 'Hallazgos', 'textarea'], ['rootCause', 'Causa raíz', 'textarea'], ['correctiveAction', 'Acción correctiva', 'textarea'], ['totalCost', 'Costo total', 'number'],
     ],
     columns: [
-      { key: 'folio', label: 'Folio' }, { key: 'title', label: 'Título' }, { key: 'equipmentCode', label: 'Equipo' }, { key: 'assignedTo', label: 'Técnico' }, { key: 'status', label: 'Estado', render: row => <Badge value={row.status}/> }, { key: 'priority', label: 'Prioridad', render: row => <Badge value={row.priority}/> }, { key: 'findings', label: 'Hallazgos', render: row => row.findings?.length ? row.findings.length : '—' },
+      { key: 'folio', label: 'Folio' }, { key: 'title', label: 'Título' }, { key: 'equipmentCode', label: 'Equipo' }, { key: 'assignedToName', label: 'Técnico', render: row => row.assignedToName || row.assignedTo || '—' }, { key: 'status', label: 'Estado', render: row => <Badge value={row.status}/> }, { key: 'priority', label: 'Prioridad', render: row => <Badge value={row.priority}/> }, { key: 'findings', label: 'Hallazgos', render: row => row.findings?.length ? row.findings.length : '—' },
     ],
   },
   requests: {
@@ -135,9 +136,10 @@ function getDefaultForm(config, type, user) {
   return { ...config.defaults };
 }
 
-function EntityForm({ config, type, value, onChange, errors, equipment, canChangeStatus }) {
+function EntityForm({ config, type, value, onChange, errors, equipment, users, canChangeStatus }) {
   if (type === 'requests') return <RequestForm value={value} onChange={onChange} errors={errors} equipment={equipment} canChangeStatus={canChangeStatus}/>;
   if (type === 'checklists') return <ChecklistForm value={value} onChange={onChange} errors={errors} equipment={equipment}/>;
+  if (type === 'workOrders') return <WorkOrderForm value={value} onChange={onChange} errors={errors} equipment={equipment} users={users}/>;
   return <div className="grid gap-4 md:grid-cols-2">{config.fields.map(([key, label, fieldType = 'text', options]) => <FormField key={key} label={label} error={errors[key]}><Input fieldKey={key} type={fieldType} options={options} value={value[key] ?? ''} onChange={next => onChange({ ...value, [key]: next })}/></FormField>)}</div>;
 }
 
@@ -198,10 +200,64 @@ function ChecklistForm({ value, onChange, errors, equipment }) {
   </div>;
 }
 
+
+function WorkOrderForm({ value, onChange, errors, equipment, users }) {
+  const mechanics = users.filter(item => item.role === 'mecanico' && item.active !== false && item.active !== 'false');
+  const setEquipment = equipmentId => {
+    const nextEquipment = selectEquipment(equipment, equipmentId);
+    onChange({
+      ...value,
+      equipmentId,
+      equipmentCode: nextEquipment?.code || nextEquipment?.id || '',
+      equipmentName: nextEquipment?.name || nextEquipment?.type || '',
+      equipmentType: nextEquipment?.type || nextEquipment?.equipmentType || '',
+      terminal: nextEquipment?.terminal || value.terminal || '',
+    });
+  };
+  const setMechanic = mechanicId => {
+    const mechanic = mechanics.find(item => (item.uid || item.id) === mechanicId);
+    onChange({
+      ...value,
+      assignedToId: mechanicId,
+      assignedTo: mechanicId,
+      assignedToName: mechanic?.name || mechanic?.email || '',
+      assignedToEmail: mechanic?.email || '',
+    });
+  };
+  return <div className="grid gap-4 md:grid-cols-2">
+    <FormField label="Título" error={errors.title}><Input fieldKey="title" type="text" value={value.title || ''} onChange={next => onChange({ ...value, title: next })}/></FormField>
+    <FormField label="Equipo" error={errors.equipmentId}><select className={inputClass} value={value.equipmentId || ''} onChange={event => setEquipment(event.target.value)}><option value="">Seleccione equipo</option>{equipment.map(item => <option key={item.id} value={item.id}>{item.code || item.id} · {item.name || 'Sin nombre'} · {item.type || 'Sin tipo'}</option>)}</select></FormField>
+    <FormField label="Código equipo"><Input fieldKey="equipmentCode" type="text" value={value.equipmentCode || ''} onChange={() => {}} disabled/></FormField>
+    <FormField label="Tipo equipo"><Input fieldKey="equipmentType" type="text" value={value.equipmentType || ''} onChange={() => {}} disabled/></FormField>
+    <FormField label="Tipo OT"><Input fieldKey="type" type="select" options={['correctiva', 'preventiva', 'operacional']} value={value.type || 'correctiva'} onChange={next => onChange({ ...value, type: next })}/></FormField>
+    <FormField label="Estado"><Input fieldKey="status" type="select" options={WORK_ORDER_STATUS} value={value.status || 'en_planificacion'} onChange={next => onChange({ ...value, status: next })}/></FormField>
+    <FormField label="Prioridad" error={errors.priority}><Input fieldKey="priority" type="select" options={PRIORITIES} value={value.priority || 'media'} onChange={next => onChange({ ...value, priority: next })}/></FormField>
+    <FormField label="Técnico asignado"><select className={inputClass} value={value.assignedToId || value.assignedTo || ''} onChange={event => setMechanic(event.target.value)}><option value="">Sin técnico asignado</option>{mechanics.map(item => <option key={item.uid || item.id} value={item.uid || item.id}>{item.name || item.email} · {item.email || 'sin email'}</option>)}</select></FormField>
+    <FormField label="Solicitado por"><Input fieldKey="requestedBy" type="text" value={value.requestedBy || ''} onChange={next => onChange({ ...value, requestedBy: next })}/></FormField>
+    <FormField label="Fecha compromiso"><Input fieldKey="dueDate" type="date" value={value.dueDate || ''} onChange={next => onChange({ ...value, dueDate: next })}/></FormField>
+    <FormField label="Terminal"><Input fieldKey="terminal" type="text" value={value.terminal || ''} onChange={next => onChange({ ...value, terminal: next })}/></FormField>
+    <FormField label="Costo total"><Input fieldKey="totalCost" type="number" value={value.totalCost || 0} onChange={next => onChange({ ...value, totalCost: next })}/></FormField>
+    <div className="md:col-span-2"><FormField label="Descripción"><Input fieldKey="description" type="textarea" value={value.description || ''} onChange={next => onChange({ ...value, description: next })}/></FormField></div>
+    <div className="md:col-span-2"><FormField label="Hallazgos"><Input fieldKey="findings" type="textarea" value={Array.isArray(value.findings) ? value.findings.map(item => item.name || item.observation || item.itemId).join('\n') : value.findings || ''} onChange={next => onChange({ ...value, findings: next })}/></FormField></div>
+    <div className="md:col-span-2"><FormField label="Causa raíz"><Input fieldKey="rootCause" type="textarea" value={value.rootCause || ''} onChange={next => onChange({ ...value, rootCause: next })}/></FormField></div>
+    <div className="md:col-span-2"><FormField label="Acción correctiva"><Input fieldKey="correctiveAction" type="textarea" value={value.correctiveAction || ''} onChange={next => onChange({ ...value, correctiveAction: next })}/></FormField></div>
+  </div>;
+}
+
 function buildPayload({ type, config, form, user, canChangeStatus, equipment }) {
   const payload = { ...form };
   const chosenEquipment = selectEquipment(equipment, payload.equipmentId);
   if (chosenEquipment) payload.equipmentCode = payload.equipmentCode || chosenEquipment.code || '';
+
+  if (type === 'workOrders') {
+    payload.equipmentCode = payload.equipmentCode || chosenEquipment?.code || '';
+    payload.equipmentName = payload.equipmentName || chosenEquipment?.name || chosenEquipment?.type || '';
+    payload.equipmentType = payload.equipmentType || chosenEquipment?.type || '';
+    payload.terminal = payload.terminal || chosenEquipment?.terminal || '';
+    if (!payload.assignedToId && payload.assignedTo && payload.assignedToName) payload.assignedToId = payload.assignedTo;
+    payload.status = payload.assignedToId && payload.dueDate && ['en_planificacion', 'pendiente_planificacion', 'pendiente_asignacion', 'pendiente', 'asignada'].includes(payload.status || '') ? 'programada' : (payload.status || 'en_planificacion');
+    if (!payload.assignedToId || !payload.dueDate) payload.status = 'en_planificacion';
+  }
 
   if (type === 'requests') {
     payload.status = canChangeStatus ? (payload.status || 'pendiente') : 'pendiente';
@@ -232,6 +288,7 @@ export default function EntityPage({ type }) {
   const { canAny } = usePermissions();
   const { data, loading } = useFirestoreCollection(config.collection, { orderBy: { field: 'createdAt', direction: 'desc' } });
   const { data: equipment } = useFirestoreCollection('equipment', { orderBy: { field: 'code', direction: 'asc' } });
+  const { data: users } = useFirestoreCollection('users', { orderBy: { field: 'name', direction: 'asc' } });
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(getDefaultForm(config, type, user));
@@ -269,8 +326,12 @@ export default function EntityPage({ type }) {
     if (Object.keys(validation).length) return;
     try {
       if (!payload.folio && config.folioPrefix) payload.folio = await generateFolio(companyId, config.folioPrefix);
+      let savedId = editing?.id;
       if (editing?.id) await updateDocument(companyId, config.collection, editing.id, payload, user);
-      else await createDocument(companyId, config.collection, payload, user);
+      else savedId = await createDocument(companyId, config.collection, payload, user);
+      if (type === 'workOrders' && payload.status === 'programada' && payload.assignedToId) {
+        await createWorkOrderAssignmentNotification(companyId, { id: savedId, ...payload }, user);
+      }
       setToast({ type: 'success', message: 'Registro guardado correctamente.' });
       close();
     } catch (error) { setToast({ type: 'error', message: handleError(error) }); }
@@ -303,5 +364,5 @@ export default function EntityPage({ type }) {
     const showReview = type === 'requests' && (canReview || canSendToMaintenance) && ['pendiente_operaciones', 'en_revision'].includes(row.status || '');
     if (!canEditThisRow && !canDelete && !showApprove && !showReview) return null;
     return <div className="flex justify-end gap-2">{canEditThisRow && <button onClick={() => openEdit(row)} className="rounded-lg border px-3 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50">Editar</button>}{showApprove && <button onClick={() => approveRequest(row, 'aprobada')} className="rounded-lg border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Aprobar</button>}{showApprove && <button onClick={() => approveRequest(row, 'rechazada')} className="rounded-lg border border-amber-200 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50">Rechazar</button>}{showReview && <button onClick={() => { setReviewing(row); setReviewComment(row.reviewComment || ''); }} className="rounded-lg border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">Revisar</button>}{canDelete && <button onClick={() => remove(row)} className="rounded-lg border border-red-200 px-3 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">Eliminar</button>}</div>;
-  } : null}/>} {editing && <Modal title={editing.id ? `Editar ${config.title}` : `Nuevo ${config.title}`} onClose={close} wide><EntityForm config={config} type={type} value={form} onChange={setForm} errors={errors} equipment={equipment} canChangeStatus={canChangeStatus}/><div className="mt-6 flex justify-end gap-2"><button className="rounded-xl border px-4 py-2 text-sm font-semibold" onClick={close}>Cancelar</button><button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white" onClick={save}>Guardar</button></div></Modal>}{reviewing && <Modal title={`Revisar solicitud ${reviewing.folio || ''}`} onClose={() => setReviewing(null)} wide><div className="space-y-4"><div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><p><b>Equipo:</b> {reviewing.equipmentCode || reviewing.equipmentName || '—'}</p><p><b>Horómetro:</b> {reviewing.hourmeter || '—'}</p><p><b>Prioridad:</b> {reviewing.priority || '—'}</p>{!!reviewing.findings?.length && <ul className="mt-2 list-disc pl-5">{reviewing.findings.map(finding => <li key={finding.itemId}>{finding.section} · {finding.name} · {finding.priority} · {finding.observation}</li>)}</ul>}</div><label className="block text-sm font-medium text-slate-700">Comentario de revisión<textarea className={`${inputClass} mt-1`} rows="3" value={reviewComment} onChange={event => setReviewComment(event.target.value)}/></label><div className="flex flex-wrap justify-end gap-2">{canReview && <button className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700" onClick={() => completeReview('mas_informacion')}>Solicitar más información</button>}{canReview && <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => completeReview('cerrada_sin_mantenimiento')}>Cerrar sin mantenimiento</button>}</div></div></Modal>}<Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)}/></section>;
+  } : null}/>} {editing && <Modal title={editing.id ? `Editar ${config.title}` : `Nuevo ${config.title}`} onClose={close} wide><EntityForm config={config} type={type} value={form} onChange={setForm} errors={errors} equipment={equipment} users={users} canChangeStatus={canChangeStatus}/><div className="mt-6 flex justify-end gap-2"><button className="rounded-xl border px-4 py-2 text-sm font-semibold" onClick={close}>Cancelar</button><button className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white" onClick={save}>Guardar</button></div></Modal>}{reviewing && <Modal title={`Revisar solicitud ${reviewing.folio || ''}`} onClose={() => setReviewing(null)} wide><div className="space-y-4"><div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><p><b>Equipo:</b> {reviewing.equipmentCode || reviewing.equipmentName || '—'}</p><p><b>Horómetro:</b> {reviewing.hourmeter || '—'}</p><p><b>Prioridad:</b> {reviewing.priority || '—'}</p>{!!reviewing.findings?.length && <ul className="mt-2 list-disc pl-5">{reviewing.findings.map(finding => <li key={finding.itemId}>{finding.section} · {finding.name} · {finding.priority} · {finding.observation}</li>)}</ul>}</div><label className="block text-sm font-medium text-slate-700">Comentario de revisión<textarea className={`${inputClass} mt-1`} rows="3" value={reviewComment} onChange={event => setReviewComment(event.target.value)}/></label><div className="flex flex-wrap justify-end gap-2">{canReview && <button className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700" onClick={() => completeReview('mas_informacion')}>Solicitar más información</button>}{canReview && <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700" onClick={() => completeReview('cerrada_sin_mantenimiento')}>Cerrar sin mantenimiento</button>}</div></div></Modal>}<Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)}/></section>;
 }

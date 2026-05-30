@@ -5,6 +5,7 @@ import FormField, { inputClass } from '../components/forms/FormField';
 import LoadingState from '../components/common/LoadingState';
 import Toast from '../components/common/Toast';
 import OperationsFindingsBoard from '../components/findings/OperationsFindingsBoard';
+import MaintenanceRequestsBoard from '../components/requests/MaintenanceRequestsBoard';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { usePermissions } from '../hooks/usePermissions';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
@@ -108,6 +109,7 @@ export default function RequestsPage({ navigationKey }) {
   if (navigationKey === 'reportFailure') return <OperatorFailureReport/>;
   if (navigationKey === 'requestStatus') return <OperatorRequestStatus/>;
   if (user?.role === 'operaciones' && navigationKey === 'requests') return <OperationsFindingsBoard/>;
+  if (user?.role === 'supervisor' && navigationKey === 'requests') return <MaintenanceRequestsBoard/>;
 
   return <div className="space-y-6">
     {canReviewFindings && <OperationsFindingsBoard/>}

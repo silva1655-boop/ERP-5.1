@@ -11,9 +11,9 @@ import { formatDate } from '../../utils/dates';
 import { handleError } from '../../utils/errorHandler';
 
 const columns = [
-  { key: 'pendiente_revision_mantenimiento', label: 'Pendientes', empty: 'Sin solicitudes pendientes.' },
-  { key: 'aprobada', label: 'Aprobadas', empty: 'Sin solicitudes aprobadas.' },
-  { key: 'convertida_ot', label: 'OT creadas', empty: 'Sin OT creadas desde solicitudes.' },
+  { key: 'pendiente_revision_mantenimiento', statuses: ['pendiente_revision_mantenimiento'], label: 'Pendientes', empty: 'Sin solicitudes pendientes.' },
+  { key: 'aprobada', statuses: ['aprobada'], label: 'Aprobadas', empty: 'Sin solicitudes aprobadas.' },
+  { key: 'convertida_en_ot', statuses: ['convertida_en_ot', 'convertida_ot'], label: 'OT creadas', empty: 'Sin OT creadas desde solicitudes.' },
 ];
 
 function RequestCard({ request, onApprove, onReject, onCreateOt }) {
@@ -40,12 +40,13 @@ export default function MaintenanceRequestsBoard() {
   const [toast, setToast] = useState(null);
 
   const individualRequests = useMemo(() => requests.filter(request => request.source === 'finding' || request.sourceFindingId), [requests]);
-  const grouped = useMemo(() => columns.reduce((acc, column) => ({ ...acc, [column.key]: individualRequests.filter(item => item.status === column.key) }), {}), [individualRequests]);
+  const grouped = useMemo(() => columns.reduce((acc, column) => ({ ...acc, [column.key]: individualRequests.filter(item => column.statuses.includes(item.status)) }), {}), [individualRequests]);
 
   const open = (nextMode, request) => { setMode(nextMode); setSelected(request); setComment(''); setReason('No corresponde mantenimiento'); };
   const close = () => { setMode(''); setSelected(null); };
 
   const submit = async () => {
+    if (mode === 'reject' && !comment.trim()) { setToast({ type: 'error', message: 'El comentario de rechazo es obligatorio.' }); return; }
     setSaving(true);
     try {
       if (mode === 'approve') {

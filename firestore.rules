@@ -105,7 +105,7 @@ service cloud.firestore {
       match /users/{userId} {
         allow read: if signedIn()
           && (userId == request.auth.uid || resource.data.uid == request.auth.uid);
-        allow read: if canReadCompany(companyId) && isCompanyAdmin(companyId);
+        allow read: if canReadCompany(companyId) && (isCompanyAdmin(companyId) || canManageWorkOrders(companyId));
         allow create, update, delete: if isCompanyAdmin(companyId)
           && requestCompanyMatches(companyId)
           && request.resource.data.uid == userId;
@@ -113,8 +113,8 @@ service cloud.firestore {
 
       match /equipment/{equipmentId} {
         allow read: if canReadCompany(companyId);
-        allow create: if isCompanyAdmin(companyId) || canImportMaintenance(companyId);
-        allow update: if isCompanyAdmin(companyId)
+        allow create: if isCompanyAdmin(companyId) || canImportMaintenance(companyId) || canManageWorkOrders(companyId);
+        allow update: if isCompanyAdmin(companyId) || canManageWorkOrders(companyId)
           || (canCreateChecklists(companyId)
               && request.resource.data.diff(resource.data).changedKeys().hasOnly(['hourmeter', 'horometroActual', 'lastHourmeterUpdateAt', 'lastHourmeterSource', 'lastChecklistId', 'status', 'updatedAt'])
               && request.resource.data.lastHourmeterSource == 'checklist');
@@ -180,9 +180,15 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow read: if canReadNotifications(companyId);
         allow create: if belongsToCompany(companyId)
-          && request.resource.data.type == 'checklist_finding'
-          && request.resource.data.checklistId is string
-          && request.resource.data.operatorId == request.auth.uid;
+          && (
+            (request.resource.data.type == 'checklist_finding'
+              && request.resource.data.checklistId is string
+              && request.resource.data.operatorId == request.auth.uid)
+            || (request.resource.data.type == 'work_order_assignment'
+              && canManageWorkOrders(companyId)
+              && request.resource.data.workOrderId is string
+              && request.resource.data.targetUserId is string)
+          );
         allow update: if canReadNotifications(companyId)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readAt', 'readBy', 'updatedAt']);
         allow delete: if isCompanyAdmin(companyId);

@@ -56,3 +56,34 @@ export async function createChecklistFindingNotification(companyId, checklist, u
   await logCreate(companyId, 'notifications', ref.id, payload, user);
   return { id: ref.id, ...payload };
 }
+
+
+export async function createWorkOrderAssignmentNotification(companyId, workOrder, user) {
+  if (!workOrder?.assignedToId) return null;
+  const ref = doc(collection(db, 'companies', companyId, 'notifications'));
+  const payload = {
+    type: 'work_order_assignment',
+    title: `OT asignada ${workOrder.folio || ''}`.trim(),
+    message: `Se programó la OT ${workOrder.folio || workOrder.id || ''} para ${workOrder.equipmentCode || workOrder.equipmentName || 'equipo'}.`,
+    audience: 'mecanico_asignado',
+    targetRoles: ['mecanico'],
+    targetUserId: workOrder.assignedToId,
+    targetUserName: workOrder.assignedToName || '',
+    targetUserEmail: workOrder.assignedToEmail || '',
+    status: 'unread',
+    priority: workOrder.priority || 'media',
+    companyId,
+    workOrderId: workOrder.id,
+    workOrderFolio: workOrder.folio || '',
+    equipmentId: workOrder.equipmentId || '',
+    equipmentCode: workOrder.equipmentCode || '',
+    dueDate: workOrder.dueDate || '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: user?.uid || '',
+    createdByName: displayName(user),
+  };
+  await setDoc(ref, payload, { merge: true });
+  await logCreate(companyId, 'notifications', ref.id, payload, user);
+  return { id: ref.id, ...payload };
+}

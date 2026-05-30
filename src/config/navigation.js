@@ -16,7 +16,7 @@ export const PAGE_REGISTRY = {
   inspections: { title: 'Inspecciones', component: ChecklistsPage, permissions: ['checklists.view', 'checklists.create', 'checklists.manage'] },
   requests: { title: 'Solicitudes', component: RequestsPage, permissions: ['requests.view', 'requests.create', 'requests.manage', 'requests.review', 'requests.approve', 'requests.sendToMaintenance'] },
   workOrders: { title: 'Órdenes de Trabajo', component: WorkOrdersPage, permissions: ['workOrders.view', 'workOrders.manage', 'workOrders.viewAssigned', 'workOrders.updateAssigned'] },
-  planning: { title: 'Planificación', component: MaintenancePlansPage, permissions: ['maintenancePlans.manage', 'maintenancePlans.import', 'workOrders.manage'] },
+  planning: { title: 'Planificación', component: MaintenancePlansPage, permissions: ['maintenancePlans.manage', 'maintenancePlans.import', 'workOrders.manage', 'planning.view', 'planning.manage'] },
   reports: { title: 'Reportes', component: ReportsPage, permissions: ['reports.view'] },
   settings: { title: 'Configuración', component: SettingsPage, permissions: ['settings.manage'] },
 };
@@ -43,8 +43,9 @@ export const NAVIGATION_BY_ROLE = {
   supervisor: [
     { key: 'inspections', page: 'inspections', label: 'Inspecciones', icon: 'clipboard', permissions: ['checklists.view', 'checklists.manage'] },
     { key: 'requests', page: 'requests', label: 'Solicitudes', icon: 'request', permissions: ['requests.view', 'requests.review', 'requests.approve', 'requests.sendToMaintenance'] },
+    { key: 'equipment', page: 'equipment', label: 'Equipos', icon: 'truck', permissions: ['equipment.view', 'equipment.manage'] },
     { key: 'workOrders', page: 'workOrders', label: 'Órdenes de Trabajo', icon: 'wrench', permissions: ['workOrders.view', 'workOrders.manage'] },
-    { key: 'planning', page: 'planning', label: 'Planificación', icon: 'calendar', permissions: ['maintenancePlans.manage', 'workOrders.manage'] },
+    { key: 'planning', page: 'planning', label: 'Planificación', icon: 'calendar', permissions: ['planning.view', 'planning.manage', 'maintenancePlans.manage', 'workOrders.manage'] },
     { key: 'reports', page: 'reports', label: 'Reportes', icon: 'reports', permissions: ['reports.view'] },
   ],
   operaciones: [

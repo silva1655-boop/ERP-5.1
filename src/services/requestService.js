@@ -50,6 +50,7 @@ export async function sendRequestToMaintenance(companyId, request, user, reviewC
     equipmentId: request.equipmentId,
     equipmentCode: request.equipmentCode,
     equipmentName: request.equipmentName,
+    equipmentType: request.equipmentType || '',
     title: `OT por ${request.folio || 'solicitud'} · ${request.equipmentCode || ''}`,
     description: request.description || 'Orden generada desde solicitud operacional.',
     findings: request.findings || [],
@@ -125,11 +126,12 @@ export async function createWorkOrderFromMaintenanceRequest(companyId, request, 
   const payload = {
     folio,
     type: 'correctiva',
-    status: 'pendiente_planificacion',
+    status: 'en_planificacion',
     priority: request.priority || 'media',
     equipmentId: request.equipmentId,
     equipmentCode: request.equipmentCode,
     equipmentName: request.equipmentName,
+    equipmentType: request.equipmentType || '',
     title: `OT ${request.systemAffected || 'hallazgo'} · ${request.equipmentCode || ''}`.trim(),
     description: request.description || request.observations || 'OT generada desde solicitud de mantenimiento.',
     source: 'maintenance_request',
@@ -148,7 +150,7 @@ export async function createWorkOrderFromMaintenanceRequest(companyId, request, 
   };
   await setDoc(ref, payload, { merge: true });
   await updateDoc(companyDoc(companyId, 'requests', request.id), {
-    status: 'convertida_ot',
+    status: 'convertida_en_ot',
     workOrderId: ref.id,
     workOrderFolio: folio,
     convertedToWorkOrderBy: user?.uid || null,
@@ -158,6 +160,6 @@ export async function createWorkOrderFromMaintenanceRequest(companyId, request, 
     updatedAt: serverTimestamp(),
   });
   await logCreate(companyId, 'workOrders', ref.id, payload, user);
-  await logUpdate(companyId, 'requests', request.id, request, { status: 'convertida_ot', workOrderId: ref.id, workOrderFolio: folio }, user);
+  await logUpdate(companyId, 'requests', request.id, request, { status: 'convertida_en_ot', workOrderId: ref.id, workOrderFolio: folio }, user);
   return { id: ref.id, ...payload };
 }

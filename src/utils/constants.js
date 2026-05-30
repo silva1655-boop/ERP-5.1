@@ -42,10 +42,13 @@ export const PERMISSIONS = {
   ],
   supervisor: [
     'equipment.view',
+    'equipment.manage',
     'equipment.updateHourmeter',
     'equipment.setOutOfService',
     'workOrders.create',
     'workOrders.manage',
+    'planning.view',
+    'planning.manage',
     'requests.view',
     'requests.review',
     'requests.approve',
@@ -76,8 +79,8 @@ export const COLLECTIONS = {
 };
 
 export const EQUIPMENT_STATUS = ['operativo', 'observado', 'mantenimiento', 'fuera_servicio', 'falla', 'inactivo'];
-export const WORK_ORDER_STATUS = ['pendiente_planificacion', 'pendiente_asignacion', 'en_ejecucion', 'cerrada', 'pendiente', 'asignada', 'en_proceso', 'completada', 'cancelada'];
-export const REQUEST_STATUS = ['pendiente_revision_mantenimiento', 'aprobada', 'rechazada', 'convertida_ot', 'pendiente', 'pendiente_operaciones', 'en_revision', 'enviada_mantenimiento', 'cerrada_sin_mantenimiento', 'mas_informacion', 'convertida'];
+export const WORK_ORDER_STATUS = ['en_planificacion', 'programada', 'en_curso', 'pausada', 'finalizada_mecanico', 'cerrada_supervisor', 'cancelada'];
+export const REQUEST_STATUS = ['pendiente_revision_mantenimiento', 'aprobada', 'rechazada', 'convertida_en_ot', 'convertida_ot', 'pendiente', 'pendiente_operaciones', 'en_revision', 'enviada_mantenimiento', 'cerrada_sin_mantenimiento', 'mas_informacion', 'convertida'];
 export const PRIORITIES = ['baja', 'media', 'alta', 'critica'];
 
 export const DEFAULT_COMPANY_SETTINGS = {
