@@ -1,5 +1,6 @@
 import { collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { uploadEvidence } from './storageService';
 import { companyDoc, generateFolio } from './firestoreService';
 import { logCreate, logStatusChange, logUpdate } from './auditService';
 import { maxPriorityFromFindings } from './requestService';
@@ -67,6 +68,55 @@ export async function createFindingsFromChecklist(companyId, checklist, user) {
     created.push({ id: ref.id, ...payload });
   }
   return created;
+}
+
+
+export async function createManualFindingReport(companyId, form, user) {
+  const equipment = form.equipment || {};
+  const ref = doc(collection(db, 'companies', companyId, 'findings'));
+  let evidence = null;
+  if (form.photoFile) {
+    evidence = await uploadEvidence(form.photoFile, companyId, 'findings', ref.id);
+  }
+  const payload = {
+    companyId,
+    source: 'manual_operator_report',
+    equipmentId: equipment.id || form.equipmentId,
+    equipmentCode: equipment.code || equipment.id || form.equipmentId,
+    equipmentName: equipment.name || equipment.type || equipment.code || '',
+    operatorId: user?.uid || '',
+    operatorName: displayName(user),
+    terminal: user?.terminal || equipment.terminal || '',
+    detectedAt: serverTimestamp(),
+    systemAffected: form.systemAffected,
+    itemId: 'manual-report',
+    itemName: form.systemAffected,
+    detectedStatus: 'manual_report',
+    detectedStatusLabel: 'Reportado por operador',
+    observation: form.description || '',
+    photos: evidence?.url ? [evidence.url] : [],
+    evidenceUrls: evidence ? [evidence] : [],
+    suggestedPriority: form.priority || 'media',
+    priority: form.priority || 'media',
+    recommendation: '',
+    maintenanceRequired: true,
+    status: FINDING_STATUS.pendingOperations,
+    statusHistory: [{
+      status: FINDING_STATUS.pendingOperations,
+      action: 'manual_operator_report',
+      userId: user?.uid || null,
+      userName: displayName(user),
+      userRole: roleOf(user),
+      createdAt: new Date().toISOString(),
+    }],
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: user?.uid || '',
+    createdByName: displayName(user),
+  };
+  await setDoc(ref, payload, { merge: true });
+  await logCreate(companyId, 'findings', ref.id, payload, user);
+  return { id: ref.id, ...payload };
 }
 
 export async function rejectFinding(companyId, finding, { reason, comment }, user) {

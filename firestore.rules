@@ -168,8 +168,11 @@ service cloud.firestore {
           || (hasRole(companyId, ['mecanico']) && resource.data.workOrderId is string);
         allow create: if canCreateChecklists(companyId)
           && request.resource.data.operatorId == request.auth.uid
-          && request.resource.data.sourceChecklistId is string
-          && request.resource.data.status == 'pendiente_revision_operaciones';
+          && request.resource.data.status == 'pendiente_revision_operaciones'
+          && (
+            request.resource.data.source == 'manual_operator_report'
+            || (request.resource.data.source == 'checklist' && request.resource.data.sourceChecklistId is string)
+          );
         allow update: if canReviewRequests(companyId);
         allow delete: if isCompanyAdmin(companyId);
       }

@@ -31,7 +31,7 @@ function ProtectedApp() {
   const pageDefinition = PAGE_REGISTRY[activeNavigationItem.page] || PAGE_REGISTRY.dashboard;
   const Page = pageDefinition?.component || DashboardPage;
 
-  return <AppLayout activePage={activeNavigationItem.key} onNavigate={setActivePage} title={activeNavigationItem.label || pageDefinition.title} branding={companySettings}>{error && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}<Page/></AppLayout>;
+  return <AppLayout activePage={activeNavigationItem.key} onNavigate={setActivePage} title={activeNavigationItem.label || pageDefinition.title} branding={companySettings}>{error && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}<Page navigationKey={activeNavigationItem.key}/></AppLayout>;
 }
 
 export default function App() {
