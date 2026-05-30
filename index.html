@@ -21,7 +21,15 @@
     <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#ffffff;font-family:Arial,sans-serif;padding:24px;box-sizing:border-box;">
+        <section style="max-width:720px;background:#ffffff;color:#0f172a;border-radius:18px;padding:28px;box-shadow:0 20px 60px rgba(15,23,42,.25);">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#2563eb;">Mantek ERP SaaS</p>
+          <h1 style="margin:0 0 10px;font-size:28px;line-height:1.15;">Cargando aplicación...</h1>
+          <p style="margin:0;color:#475569;line-height:1.5;">Si este mensaje permanece, revisa que Vercel esté sirviendo los assets generados y que las variables VITE_FIREBASE_* estén configuradas.</p>
+        </section>
+      </main>
+    </div>
     <script type="module" src="/main.jsx"></script>
   </body>
 </html>

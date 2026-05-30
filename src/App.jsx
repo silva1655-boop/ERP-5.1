@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import AppLayout from './components/layout/AppLayout';
 import LoadingState from './components/common/LoadingState';
+import FirebaseConfigNotice from './components/common/FirebaseConfigNotice';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
+import { isFirebaseConfigured } from './services/firebase';
 import { usePermissions } from './hooks/usePermissions';
 import DashboardPage from './pages/DashboardPage';
 import LoginPage from './pages/LoginPage';
@@ -33,6 +36,7 @@ function ProtectedApp() {
   const allowedPages = useMemo(() => Object.entries(pages).filter(([, page]) => canAny(page.permissions)).map(([key]) => key), [canAny]);
 
   if (loading) return <main className="min-h-screen bg-slate-100 p-6"><LoadingState label="Validando sesión..."/></main>;
+  if (!isFirebaseConfigured) return <main className="min-h-screen bg-slate-100 p-6"><div className="mx-auto max-w-3xl"><FirebaseConfigNotice/></div></main>;
   if (!isAuthenticated) return <LoginPage/>;
   const safePage = allowedPages.includes(activePage) ? activePage : allowedPages[0] || 'dashboard';
   const page = pages[safePage];
@@ -41,5 +45,5 @@ function ProtectedApp() {
 }
 
 export default function App() {
-  return <AuthProvider><ProtectedApp/></AuthProvider>;
+  return <ErrorBoundary><AuthProvider><ProtectedApp/></AuthProvider></ErrorBoundary>;
 }

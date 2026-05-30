@@ -31,7 +31,7 @@ export const PERMISSIONS = {
     'settings.manage',
   ],
   supervisor: [
-    'equipment.manage',
+    'equipment.view',
     'workOrders.manage',
     'requests.approve',
     'requests.view',

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { auth, isFirebaseConfigured } from '../services/firebase';
 import { loginWithEmail, logout as authLogout, resetPassword as sendReset, resolveUserProfile } from '../services/authService';
 import { getCompanySettings } from '../services/firestoreService';
 import { DEFAULT_COMPANY_SETTINGS } from '../utils/constants';
@@ -16,6 +16,15 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setFirebaseUser(null);
+      setProfile(null);
+      setCompanySettings(DEFAULT_COMPANY_SETTINGS);
+      setError('Firebase no está configurado. Agrega las variables VITE_FIREBASE_* en el entorno de despliegue.');
+      setLoading(false);
+      return undefined;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async user => {
       setLoading(true);
       setError('');

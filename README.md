@@ -34,6 +34,12 @@ VITE_FIREBASE_APP_ID=
 
 No hay credenciales ni contraseñas hardcodeadas en el frontend. Los usuarios se autentican únicamente con Firebase Authentication.
 
+### Deploy en Vercel sin pantalla en blanco
+
+Antes de desplegar en Vercel, agrega las seis variables `VITE_FIREBASE_*` en **Project Settings → Environment Variables** para Production, Preview y Development. Si faltan variables, la app ya no queda en blanco: muestra un aviso de configuración pendiente con la lista exacta de claves faltantes.
+
+Si ya probaste una versión anterior y el navegador mantiene una pantalla en blanco, fuerza una recarga completa o borra datos del sitio. Esta versión publica un service worker autodestructivo para retirar el caché PWA previo y además deja un fallback HTML visible si JavaScript no alcanza a montar React.
+
 ## Configuración Firebase
 
 1. Crea un proyecto Firebase.
@@ -62,7 +68,9 @@ Campos mínimos:
 }
 ```
 
-5. Publica `firestore.rules` para restringir acceso por autenticación, empresa y rol.
+> Nota: si ya creaste perfiles usando `companyid` en minúscula, la app y las reglas actuales lo toleran para desbloquear el acceso, pero se recomienda agregar también `companyId` en camelCase al documento del usuario.
+
+5. Publica `firestore.rules` para restringir acceso por autenticación, empresa y rol. Esto es obligatorio para que el login pueda leer `companies/{companyId}/users/{uid}`.
 6. Configura reglas de Storage equivalentes para rutas `companies/{companyId}/...` antes de producción.
 
 ## Estructura de carpetas
