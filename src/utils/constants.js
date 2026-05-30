@@ -54,7 +54,7 @@ export const PERMISSIONS = {
     'checklists.view',
     'reports.view',
   ],
-  operaciones: ['requests.create', 'requests.view', 'requests.review', 'requests.sendToMaintenance', 'findings.review', 'checklists.view', 'checklists.create', 'equipment.view', 'reports.view'],
+  operaciones: ['requests.view', 'requests.review', 'requests.sendToMaintenance', 'findings.review', 'checklists.view', 'equipment.view', 'reports.view'],
   mecanico: ['workOrders.viewAssigned', 'workOrders.updateAssigned', 'equipment.view', 'checklists.create'],
   operador: ['checklists.create', 'checklists.view', 'requests.create', 'requests.view', 'equipment.view'],
   cliente_lectura: ['reports.view', 'equipment.view', 'workOrders.view'],

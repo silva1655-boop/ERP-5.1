@@ -11,9 +11,9 @@ import { formatDate } from '../../utils/dates';
 import { handleError } from '../../utils/errorHandler';
 
 const columns = [
-  { key: 'pendiente_revision_operaciones', label: 'Pendientes', empty: 'Sin hallazgos pendientes.' },
-  { key: 'convertido_en_solicitud', label: 'Derivados', empty: 'Sin hallazgos derivados.' },
-  { key: 'rechazado', label: 'Rechazados', empty: 'Sin hallazgos rechazados.' },
+  { key: 'pendiente_revision_operaciones', statuses: ['pendiente_revision_operaciones'], label: 'Pendientes', empty: 'Sin hallazgos pendientes.' },
+  { key: 'derivado_mantenimiento', statuses: ['derivado_mantenimiento', 'convertido_en_solicitud'], label: 'Derivados a mantenimiento', empty: 'Sin hallazgos derivados.' },
+  { key: 'rechazado', statuses: ['rechazado'], label: 'Rechazados', empty: 'Sin hallazgos rechazados.' },
 ];
 
 const rejectionReasons = ['Error de inspección', 'Duplicado', 'Condición normal', 'Hallazgo ya corregido'];
@@ -30,13 +30,13 @@ function FindingCard({ finding, onCreateRequest, onReject }) {
   return <article className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
     {photo && <img src={photo} alt={`Evidencia ${finding.itemName}`} className="mb-3 h-32 w-full rounded-xl object-cover"/>}
     <div className="flex items-start justify-between gap-2">
-      <div><p className="text-sm font-bold text-slate-900">{finding.equipmentCode || finding.equipmentName || 'Equipo'}</p><p className="text-xs text-slate-500">{finding.systemAffected} · {finding.itemName}</p></div>
+      <div><p className="text-sm font-bold text-slate-900">{finding.equipmentCode || finding.equipmentName || 'Equipo'}</p><p className="text-xs text-slate-500">{finding.equipmentType || 'Equipo'} · {finding.systemAffected} · {finding.itemName}</p></div>
       <Badge value={finding.priority || finding.suggestedPriority}/>
     </div>
     <div className="mt-2 flex flex-wrap gap-2 text-xs"><span className={`rounded-full border px-2 py-1 font-semibold ${findingStatusColor(finding.detectedStatus)}`}>{finding.detectedStatusLabel || finding.detectedStatus}</span><span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">{formatDate(finding.detectedAt || finding.createdAt)}</span></div>
-    <p className="mt-2 text-xs text-slate-600"><b>Operador:</b> {finding.operatorName || '—'}</p>
+    <p className="mt-2 text-xs text-slate-600"><b>Operador:</b> {finding.operatorName || '—'}</p><p className="mt-1 text-xs text-slate-600"><b>Tipo equipo:</b> {finding.equipmentType || '—'}</p>
     <p className="mt-2 line-clamp-3 text-sm text-slate-700">{finding.observation || 'Sin observación'}</p>
-    {pending && <div className="mt-3 grid gap-2 sm:grid-cols-2"><button className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50" onClick={() => onCreateRequest(finding)}>Crear Solicitud</button><button className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50" onClick={() => onReject(finding)}>Rechazar Hallazgo</button></div>}
+    {pending && <div className="mt-3 grid gap-2 sm:grid-cols-2"><button className="rounded-xl border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50" onClick={() => onCreateRequest(finding)}>Crear Solicitud de Mantenimiento</button><button className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50" onClick={() => onReject(finding)}>Rechazar Hallazgo</button></div>}
   </article>;
 }
 
@@ -49,7 +49,7 @@ export default function OperationsFindingsBoard() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
 
-  const grouped = useMemo(() => columns.reduce((acc, column) => ({ ...acc, [column.key]: findings.filter(item => item.status === column.key) }), {}), [findings]);
+  const grouped = useMemo(() => columns.reduce((acc, column) => ({ ...acc, [column.key]: findings.filter(item => column.statuses.includes(item.status)) }), {}), [findings]);
 
   const openCreateRequest = finding => {
     setSelected(finding);

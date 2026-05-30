@@ -101,11 +101,13 @@ function OperatorRequestStatus() {
 }
 
 export default function RequestsPage({ navigationKey }) {
+  const { user } = useAuth();
   const { canAny } = usePermissions();
   const canReviewFindings = canAny(['requests.review', 'requests.manage', 'requests.sendToMaintenance', 'findings.review']);
 
   if (navigationKey === 'reportFailure') return <OperatorFailureReport/>;
   if (navigationKey === 'requestStatus') return <OperatorRequestStatus/>;
+  if (user?.role === 'operaciones' && navigationKey === 'requests') return <OperationsFindingsBoard/>;
 
   return <div className="space-y-6">
     {canReviewFindings && <OperationsFindingsBoard/>}

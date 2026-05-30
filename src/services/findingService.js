@@ -26,6 +26,7 @@ function findingPayloadFromChecklistFinding(checklist, finding, user) {
     equipmentId: checklist.equipmentId,
     equipmentCode: checklist.equipmentCode,
     equipmentName: checklist.equipmentName,
+    equipmentType: checklist.equipmentType || checklist.type || '',
     operatorId: checklist.operatorId || user?.uid || '',
     operatorName: checklist.operatorName || displayName(user),
     terminal: checklist.terminal || user?.terminal || '',
@@ -84,6 +85,7 @@ export async function createManualFindingReport(companyId, form, user) {
     equipmentId: equipment.id || form.equipmentId,
     equipmentCode: equipment.code || equipment.id || form.equipmentId,
     equipmentName: equipment.name || equipment.type || equipment.code || '',
+    equipmentType: equipment.type || equipment.equipmentType || '',
     operatorId: user?.uid || '',
     operatorName: displayName(user),
     terminal: user?.terminal || equipment.terminal || '',
@@ -144,16 +146,22 @@ export async function createMaintenanceRequestFromFinding(companyId, finding, { 
     status: 'pendiente_revision_mantenimiento',
     priority: priority || finding.priority || finding.suggestedPriority || 'media',
     source: 'finding',
+    findingId: finding.id,
     sourceFindingId: finding.id,
+    checklistId: finding.sourceChecklistId || finding.sourceInspectionId || '',
     sourceInspectionId: finding.sourceInspectionId || finding.sourceChecklistId,
     sourceChecklistId: finding.sourceChecklistId,
     sourceChecklistFolio: finding.sourceChecklistFolio,
     equipmentId: finding.equipmentId,
     equipmentCode: finding.equipmentCode,
     equipmentName: finding.equipmentName,
+    equipmentType: finding.equipmentType || '',
+    system: finding.systemAffected,
     systemAffected: finding.systemAffected,
     detectedStatus: finding.detectedStatus,
     detectedStatusLabel: finding.detectedStatusLabel,
+    itemLabel: finding.itemName || finding.systemAffected || '',
+    operatorObservation: finding.observation || '',
     observations: finding.observation || '',
     operationalComment: operationalComment || '',
     recommendation: recommendation || finding.recommendation || '',
@@ -180,7 +188,7 @@ export async function createMaintenanceRequestFromFinding(companyId, finding, { 
   };
   await setDoc(ref, request, { merge: true });
   await updateDoc(companyDoc(companyId, 'findings', finding.id), {
-    status: FINDING_STATUS.convertedToRequest,
+    status: FINDING_STATUS.sentToMaintenance,
     maintenanceRequestId: ref.id,
     maintenanceRequestFolio: folio,
     operationalComment: operationalComment || '',
@@ -192,7 +200,7 @@ export async function createMaintenanceRequestFromFinding(companyId, finding, { 
     updatedAt: serverTimestamp(),
   });
   await logCreate(companyId, 'requests', ref.id, request, user);
-  await logStatusChange(companyId, 'findings', finding.id, { status: finding.status, finding }, { status: FINDING_STATUS.convertedToRequest, maintenanceRequestId: ref.id, maintenanceRequestFolio: folio }, user);
+  await logStatusChange(companyId, 'findings', finding.id, { status: finding.status, finding }, { status: FINDING_STATUS.sentToMaintenance, maintenanceRequestId: ref.id, maintenanceRequestFolio: folio }, user);
   return { id: ref.id, ...request };
 }
 

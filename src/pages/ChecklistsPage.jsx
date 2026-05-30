@@ -18,6 +18,8 @@ const countAnswers = (answers = {}) => Object.values(answers).reduce((acc, answe
   return acc;
 }, { good: 0, conditional: 0, bad: 0 });
 
+const statusOptions = ['completado', 'pendiente_revision', 'critica', 'con_hallazgos'];
+
 const historyColumns = [
   { key: 'createdAt', label: 'Fecha', render: row => formatDate(row.createdAt) },
   { key: 'equipmentCode', label: 'Equipo', render: row => row.equipmentCode || row.equipmentName || '—' },
@@ -57,6 +59,7 @@ export default function ChecklistsPage({ navigationKey }) {
   const { data: equipment } = useFirestoreCollection('equipment', { orderBy: { field: 'code', direction: 'asc' } });
   const isOperatorHistory = navigationKey === 'myInspections';
   const isOperatorNew = navigationKey === 'newInspection';
+  const isOperationsView = user?.role === 'operaciones' && navigationKey === 'inspections';
   const checklistQueryOptions = user?.role === 'operador'
     ? { where: [['operatorId', '==', user?.uid || '']], limit: 100 }
     : { orderBy: { field: 'createdAt', direction: 'desc' }, limit: 100 };
@@ -64,14 +67,25 @@ export default function ChecklistsPage({ navigationKey }) {
   const sortedChecklists = useMemo(() => [...checklists].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)), [checklists]);
   const [toast, setToast] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [filters, setFilters] = useState({ query: '', operator: '', terminal: '', status: '', date: '' });
   const canCreate = canAny(['checklists.create', 'checklists.manage']);
   const canOverrideHourmeter = canAny(['equipment.updateHourmeter', 'equipment.manage']);
-  const showRunner = canCreate && !isOperatorHistory;
-  const showHistory = !isOperatorNew;
+  const filteredChecklists = useMemo(() => sortedChecklists.filter(item => {
+    const query = filters.query.trim().toLowerCase();
+    const created = item.createdAt?.toDate ? item.createdAt.toDate().toISOString().slice(0, 10) : '';
+    const matchesQuery = !query || [item.equipmentCode, item.equipmentName, item.checklistTypeLabel, item.checklistType].filter(Boolean).some(value => String(value).toLowerCase().includes(query));
+    const matchesOperator = !filters.operator || String(item.operatorName || '').toLowerCase().includes(filters.operator.toLowerCase());
+    const matchesTerminal = !filters.terminal || String(item.terminal || '').toLowerCase().includes(filters.terminal.toLowerCase());
+    const matchesStatus = !filters.status || item.status === filters.status || item.result === filters.status;
+    const matchesDate = !filters.date || created === filters.date;
+    return matchesQuery && matchesOperator && matchesTerminal && matchesStatus && matchesDate;
+  }), [sortedChecklists, filters]);
+  const showRunner = canCreate && !isOperatorHistory && !isOperationsView;
+  const showHistory = !isOperatorNew || isOperationsView;
 
   return <section className="space-y-5">
     {showRunner && <ChecklistRunner companyId={companyId} user={user} equipment={equipment.filter(item => item.status !== 'fuera_servicio')} canOverrideHourmeter={canOverrideHourmeter} onSaved={({ findings, checklist }) => setToast({ type: 'success', message: findings?.length ? `Checklist ${checklist.folio} guardado con ${findings.length} hallazgo(s) individual(es) para revisión.` : `Checklist ${checklist.folio} guardado sin hallazgos.` })}/>}
-    {showHistory && <div className="space-y-3"><div><h3 className="text-lg font-bold text-slate-900">{isOperatorHistory ? 'Mis inspecciones' : 'Historial de checklists'}</h3><p className="text-sm text-slate-500">{isOperatorHistory ? 'Solo lectura de inspecciones creadas por tu usuario.' : 'Últimas inspecciones preoperacionales registradas.'}</p></div>{loading ? <LoadingState/> : <DataTable columns={historyColumns} rows={sortedChecklists} actions={row => <button onClick={() => setSelected(row)} className="rounded-lg border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">Ver detalle</button>}/>}</div>}
+    {showHistory && <div className="space-y-3"><div><h3 className="text-lg font-bold text-slate-900">{isOperatorHistory ? 'Mis inspecciones' : 'Historial de inspecciones'}</h3><p className="text-sm text-slate-500">{isOperatorHistory ? 'Solo lectura de inspecciones creadas por tu usuario.' : 'Vista operacional de inspecciones realizadas por operadores.'}</p></div>{isOperationsView && <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:grid-cols-5"><input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Equipo" value={filters.query} onChange={event => setFilters({ ...filters, query: event.target.value })}/><input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Operador" value={filters.operator} onChange={event => setFilters({ ...filters, operator: event.target.value })}/><input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Terminal" value={filters.terminal} onChange={event => setFilters({ ...filters, terminal: event.target.value })}/><input className="rounded-lg border border-slate-300 px-3 py-2 text-sm" type="date" value={filters.date} onChange={event => setFilters({ ...filters, date: event.target.value })}/><select className="rounded-lg border border-slate-300 px-3 py-2 text-sm" value={filters.status} onChange={event => setFilters({ ...filters, status: event.target.value })}><option value="">Todos los estados</option>{statusOptions.map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}</select></div>}{loading ? <LoadingState/> : <DataTable columns={historyColumns} rows={filteredChecklists} actions={row => <button onClick={() => setSelected(row)} className="rounded-lg border border-blue-200 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50">Ver detalle</button>}/>}</div>}
     {selected && <Modal title={`Detalle inspección ${selected.folio || ''}`} onClose={() => setSelected(null)} wide><ChecklistDetail checklist={selected}/></Modal>}
     <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)}/>
   </section>;

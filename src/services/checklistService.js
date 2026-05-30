@@ -61,6 +61,7 @@ export async function savePreoperationalChecklist({ companyId, template, form, a
     equipmentId: equipment.id,
     equipmentCode: equipment.code || equipment.id,
     equipmentName: equipment.name || equipment.type || equipment.id,
+    equipmentType: equipment.type || equipment.equipmentType || '',
     operatorId: user?.uid || '',
     operatorName: displayName(user),
     terminal: form.terminal || user?.terminal || equipment.terminal || '',
