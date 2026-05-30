@@ -90,3 +90,5 @@ export default function ChecklistsPage({ navigationKey }) {
     <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)}/>
   </section>;
 }
+import EntityPage from './EntityPage';
+export default function ChecklistsPage(){ return <EntityPage type="checklists"/>; }

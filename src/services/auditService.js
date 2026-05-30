@@ -20,4 +20,14 @@ export const logDelete = (companyId, entityType, entityId, before, user) => writ
 });
 export const logStatusChange = (companyId, entityType, entityId, before, after, user) => writeAudit(companyId, {
   action: 'status_change', entityType, entityId, userId: user?.uid || user?.id || null, userName: user?.name || user?.email || 'Sistema', userRole: user?.role || 'sin_rol', before, after,
+  action: 'create', entityType, entityId, userId: user?.uid || user?.id || null, userName: user?.name || user?.email || 'Sistema', before: null, after,
+});
+export const logUpdate = (companyId, entityType, entityId, before, after, user) => writeAudit(companyId, {
+  action: 'update', entityType, entityId, userId: user?.uid || user?.id || null, userName: user?.name || user?.email || 'Sistema', before, after,
+});
+export const logDelete = (companyId, entityType, entityId, before, user) => writeAudit(companyId, {
+  action: 'delete', entityType, entityId, userId: user?.uid || user?.id || null, userName: user?.name || user?.email || 'Sistema', before, after: null,
+});
+export const logStatusChange = (companyId, entityType, entityId, before, after, user) => writeAudit(companyId, {
+  action: 'status_change', entityType, entityId, userId: user?.uid || user?.id || null, userName: user?.name || user?.email || 'Sistema', before, after,
 });

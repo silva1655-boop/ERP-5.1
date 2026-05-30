@@ -77,3 +77,5 @@ export default function MaintenancePlansPage({ navigationKey }){
   if (navigationKey === 'planning' && canAny(['planning.view', 'planning.manage', 'workOrders.manage'])) return <PlanningBoard/>;
   return <div className="space-y-4"><div className="flex justify-end"><MaintenancePlanImport companyId={companyId} user={user} canImport={canAny(['maintenancePlans.import', 'maintenancePlans.manage'])}/></div><EntityPage type="maintenancePlans"/></div>;
 }
+import EntityPage from './EntityPage';
+export default function MaintenancePlansPage(){ return <EntityPage type="maintenancePlans"/>; }

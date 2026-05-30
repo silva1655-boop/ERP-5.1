@@ -116,3 +116,5 @@ export default function RequestsPage({ navigationKey }) {
     <EntityPage type="requests"/>
   </div>;
 }
+import EntityPage from './EntityPage';
+export default function RequestsPage(){ return <EntityPage type="requests"/>; }

@@ -41,6 +41,9 @@ export function AuthProvider({ children }) {
       setError('');
       resolvedInitialAuth = true;
       clearTimeout(authTimeout);
+    const unsubscribe = onAuthStateChanged(auth, async user => {
+      setLoading(true);
+      setError('');
       try {
         setFirebaseUser(user);
         if (!user) {
@@ -50,6 +53,8 @@ export function AuthProvider({ children }) {
         }
         const loadedProfile = await resolveUserProfile(user);
         if (loadedProfile?.active === false || loadedProfile?.active === 'false') {
+        const loadedProfile = await resolveUserProfile(user.uid);
+        if (!loadedProfile?.active) {
           await authLogout();
           throw Object.assign(new Error('Usuario inactivo'), { code: 'auth/user-disabled' });
         }
@@ -61,6 +66,8 @@ export function AuthProvider({ children }) {
           if (import.meta.env.DEV) console.warn('No se pudo cargar settings/general; se usarán valores por defecto.', settingsError);
           setCompanySettings(DEFAULT_COMPANY_SETTINGS);
         }
+        const settings = await getCompanySettings(loadedProfile.companyId);
+        setCompanySettings({ ...DEFAULT_COMPANY_SETTINGS, ...(settings || {}) });
       } catch (err) {
         setError(handleError(err));
         setProfile(null);
@@ -72,6 +79,7 @@ export function AuthProvider({ children }) {
       clearTimeout(authTimeout);
       unsubscribe();
     };
+    return unsubscribe;
   }, []);
 
   const value = useMemo(() => ({

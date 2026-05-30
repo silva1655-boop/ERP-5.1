@@ -18,6 +18,7 @@ service cloud.firestore {
       return userDoc(companyId).data.companyId == companyId
         || userDoc(companyId).data.companyid == companyId
         || userDoc(companyId).data.uid == request.auth.uid;
+        || userDoc(companyId).data.companyid == companyId;
     }
 
     function requestCompanyMatches(companyId) {
@@ -30,6 +31,7 @@ service cloud.firestore {
         && userCompanyMatches(companyId)
         && userDoc(companyId).data.active != false
         && userDoc(companyId).data.active != 'false';
+        && userDoc(companyId).data.active == true;
     }
 
     function role(companyId) {
@@ -74,6 +76,7 @@ service cloud.firestore {
 
     function canImportMaintenance(companyId) {
       return hasRole(companyId, ['superadmin', 'admin_empresa']);
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'operaciones']);
     }
 
     function canCreateChecklists(companyId) {
@@ -95,6 +98,9 @@ service cloud.firestore {
           || (request.resource.data.prefix == 'SOL' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
           || (request.resource.data.prefix == 'CHK' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
           || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) in ['supervisor', 'operaciones'])
+          || (request.resource.data.prefix == 'SOL' && role(companyId) == 'operaciones')
+          || (request.resource.data.prefix == 'CHK' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
+          || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) == 'supervisor')
         );
     }
 
@@ -106,6 +112,8 @@ service cloud.firestore {
         allow read: if signedIn()
           && (userId == request.auth.uid || resource.data.uid == request.auth.uid);
         allow read: if canReadCompany(companyId) && (isCompanyAdmin(companyId) || canManageWorkOrders(companyId));
+          && resource.data.uid == request.auth.uid;
+        allow read: if canReadCompany(companyId) && isCompanyAdmin(companyId);
         allow create, update, delete: if isCompanyAdmin(companyId)
           && requestCompanyMatches(companyId)
           && request.resource.data.uid == userId;
@@ -119,11 +127,13 @@ service cloud.firestore {
               && request.resource.data.diff(resource.data).changedKeys().hasOnly(['hourmeter', 'horometroActual', 'lastHourmeterUpdateAt', 'lastHourmeterSource', 'lastChecklistId', 'status', 'updatedAt'])
               && request.resource.data.lastHourmeterSource == 'checklist');
         allow delete: if isCompanyAdmin(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
       }
 
       match /workOrders/{workOrderId} {
         allow read: if canReadCompany(companyId);
         allow create: if canManageWorkOrders(companyId) || hasRole(companyId, ['operaciones']);
+        allow create: if canManageWorkOrders(companyId);
         allow delete: if isCompanyAdmin(companyId);
         allow update: if canManageWorkOrders(companyId)
           || (hasRole(companyId, ['mecanico'])
@@ -149,6 +159,10 @@ service cloud.firestore {
             && request.resource.data.sourceFindingId is string
           );
         allow update: if canManageRequests(companyId) || canApproveRequests(companyId) || canReviewRequests(companyId);
+        allow create: if canCreateRequests(companyId)
+          && request.resource.data.status == 'pendiente'
+          && request.resource.data.requestedById == request.auth.uid;
+        allow update: if canManageRequests(companyId) || canApproveRequests(companyId);
         allow delete: if isCompanyAdmin(companyId);
       }
 
@@ -191,6 +205,10 @@ service cloud.firestore {
           );
         allow update: if canReadNotifications(companyId)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readAt', 'readBy', 'updatedAt']);
+        allow read: if canReadCompany(companyId);
+        allow create: if canCreateChecklists(companyId)
+          && request.resource.data.operatorId == request.auth.uid;
+        allow update: if isCompanyAdmin(companyId);
         allow delete: if isCompanyAdmin(companyId);
       }
 
@@ -210,6 +228,7 @@ service cloud.firestore {
         allow read: if isCompanyAdmin(companyId);
         allow create: if canImportMaintenance(companyId);
         allow update, delete: if isCompanyAdmin(companyId);
+        allow create, update, delete: if isCompanyAdmin(companyId);
       }
 
       match /spareParts/{partId} {

@@ -26,5 +26,8 @@ export function validateWorkOrder(payload) {
     errors.assignedToId = 'Debe asignar un técnico para este estado';
   }
   if (payload.status === 'programada' && !isRequired(payload.dueDate)) errors.dueDate = 'Debe definir fecha compromiso para programar';
+  if (['asignada', 'en_proceso'].includes(payload.status) && !isRequired(payload.assignedTo)) {
+    errors.assignedTo = 'Debe asignar un técnico para este estado';
+  }
   return errors;
 }

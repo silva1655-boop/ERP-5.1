@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import FirebaseConfigNotice from '../components/common/FirebaseConfigNotice';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { handleError } from '../utils/errorHandler';

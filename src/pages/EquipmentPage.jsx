@@ -92,3 +92,5 @@ export default function EquipmentPage({ navigationKey }) {
   if (navigationKey === 'equipmentStatus' || user?.role === 'operaciones') return <OperationalEquipmentBoard/>;
   return <><EquipmentSeedPanel/><EntityPage type="equipment"/></>;
 }
+import EntityPage from './EntityPage';
+export default function EquipmentPage(){ return <EntityPage type="equipment"/>; }
