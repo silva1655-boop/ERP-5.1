@@ -22,6 +22,10 @@ export function validateWorkOrder(payload) {
   const errors = validateRequiredFields(payload, ['title', 'equipmentId', 'priority', 'status']);
   if (!isValidPriority(payload.priority)) errors.priority = 'Prioridad inválida';
   if (!isValidStatus(payload.status, 'workOrder')) errors.status = 'Estado inválido';
+  if (['programada', 'en_curso'].includes(payload.status) && !isRequired(payload.assignedToId || payload.assignedTo)) {
+    errors.assignedToId = 'Debe asignar un técnico para este estado';
+  }
+  if (payload.status === 'programada' && !isRequired(payload.dueDate)) errors.dueDate = 'Debe definir fecha compromiso para programar';
   if (['asignada', 'en_proceso'].includes(payload.status) && !isRequired(payload.assignedTo)) {
     errors.assignedTo = 'Debe asignar un técnico para este estado';
   }
