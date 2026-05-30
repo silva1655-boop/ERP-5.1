@@ -1,45 +1,108 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 import AppLayout from './components/layout/AppLayout';
 import LoadingState from './components/common/LoadingState';
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx';
-import { usePermissions } from './hooks/usePermissions';
-import DashboardPage from './pages/DashboardPage';
-import LoginPage from './pages/LoginPage';
-import EquipmentPage from './pages/EquipmentPage';
-import WorkOrdersPage from './pages/WorkOrdersPage';
-import RequestsPage from './pages/RequestsPage';
-import ChecklistsPage from './pages/ChecklistsPage';
-import MaintenancePlansPage from './pages/MaintenancePlansPage';
-import UsersPage from './pages/UsersPage';
-import ReportsPage from './pages/ReportsPage';
-import SettingsPage from './pages/SettingsPage';
+import { useLegacyData } from './hooks/useLegacyData';
 
-const pages = {
-  dashboard: { title: 'Dashboard', component: DashboardPage, permissions: ['equipment.view', 'workOrders.view', 'workOrders.manage', 'reports.view'] },
-  equipment: { title: 'Equipos', component: EquipmentPage, permissions: ['equipment.view', 'equipment.manage'] },
-  workOrders: { title: 'Órdenes de trabajo', component: WorkOrdersPage, permissions: ['workOrders.view', 'workOrders.manage', 'workOrders.viewAssigned'] },
-  requests: { title: 'Solicitudes', component: RequestsPage, permissions: ['requests.view', 'requests.create', 'requests.manage', 'requests.approve'] },
-  checklists: { title: 'Checklists', component: ChecklistsPage, permissions: ['checklists.view', 'checklists.create', 'checklists.manage'] },
-  maintenancePlans: { title: 'Planes de mantenimiento', component: MaintenancePlansPage, permissions: ['maintenancePlans.manage', 'workOrders.manage'] },
-  users: { title: 'Usuarios', component: UsersPage, permissions: ['users.manage'] },
-  reports: { title: 'Reportes', component: ReportsPage, permissions: ['reports.view'] },
-  settings: { title: 'Configuración', component: SettingsPage, permissions: ['settings.manage'] },
+// Pages
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
+import WorkOrdersPage from './pages/WorkOrdersPage';
+import EquipmentPage from './pages/EquipmentPage';
+import PlansPage from './pages/PlansPage';
+import IndicadoresPage from './pages/IndicadoresPage';
+import RequestsPage from './pages/RequestsPage';
+import ChecklistPage from './pages/ChecklistPage';
+import DeviationsPage from './pages/DeviationsPage';
+import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
+import NotificationsPage from './pages/NotificationsPage';
+
+// Nav allowed per role
+const ROLE_NAV = {
+  supervisor:  ['dashboard','workorders','equipment','plans','indicadores','requests','checklist','deviaciones','reports','users'],
+  mecanico:    ['dashboard','workorders','deviaciones','reports'],
+  operaciones: ['dashboard','requests','checklist','plans','notifications'],
+  operador:    ['dashboard','checklist','notifications'],
 };
 
-function ProtectedApp() {
-  const { loading, isAuthenticated, companySettings, error } = useAuth();
-  const { canAny } = usePermissions();
-  const [activePage, setActivePage] = useState('dashboard');
-  const allowedPages = useMemo(() => Object.entries(pages).filter(([, page]) => canAny(page.permissions)).map(([key]) => key), [canAny]);
+function AppContent({ user, data, setData, saveData }) {
+  const [page, setPage] = useState('dashboard');
+  const { logout } = useAuth();
 
-  if (loading) return <main className="min-h-screen bg-slate-100 p-6"><LoadingState label="Validando sesión..."/></main>;
-  if (!isAuthenticated) return <LoginPage/>;
-  const safePage = allowedPages.includes(activePage) ? activePage : allowedPages[0] || 'dashboard';
-  const page = pages[safePage];
-  const Page = page?.component || DashboardPage;
-  return <AppLayout activePage={safePage} onNavigate={setActivePage} title={page?.title || 'Dashboard'} branding={companySettings}>{error && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}<Page/></AppLayout>;
+  const props = { user, data, setData, saveData, onNav: setPage };
+
+  const PAGES = {
+    dashboard:     <DashboardPage    {...props} />,
+    workorders:    <WorkOrdersPage   {...props} />,
+    equipment:     <EquipmentPage    {...props} />,
+    plans:         <PlansPage        {...props} />,
+    indicadores:   <IndicadoresPage  {...props} />,
+    requests:      <RequestsPage     {...props} />,
+    checklist:     <ChecklistPage    {...props} />,
+    deviaciones:   <DeviationsPage   {...props} />,
+    reports:       <ReportsPage      {...props} />,
+    users:         <UsersPage        {...props} />,
+    notifications: <NotificationsPage {...props} />,
+  };
+
+  const allowedNav = ROLE_NAV[user.role] || ['dashboard'];
+  const activePage = allowedNav.includes(page) ? page : 'dashboard';
+
+  // Count pending notifications
+  const notifCount = (data.requests || []).filter(r =>
+    r.status === 'pendiente' &&
+    (user.role === 'supervisor' ||
+     (user.role === 'operaciones' && r.source === 'checklist') ||
+     r.requestedBy === user.id)
+  ).length;
+
+  return (
+    <AppLayout
+      active={activePage}
+      onNav={setPage}
+      user={user}
+      allowedNav={allowedNav}
+      notifications={notifCount}
+      online={navigator.onLine}
+      onLogout={logout}
+      onChangePassword={() => {}}
+    >
+      {PAGES[activePage] || PAGES.dashboard}
+    </AppLayout>
+  );
+}
+
+function ProtectedApp() {
+  const { loading, isAuthenticated, user } = useAuth();
+  const legacyState = useLegacyData();
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <LoadingState label="Validando sesión..." />
+      </main>
+    );
+  }
+
+  if (!isAuthenticated || !user) return <LoginPage />;
+
+  return (
+    <AppContent
+      user={user}
+      data={legacyState.data}
+      setData={legacyState.setData}
+      saveData={legacyState.saveData}
+    />
+  );
 }
 
 export default function App() {
-  return <AuthProvider><ProtectedApp/></AuthProvider>;
+  return (
+    <AuthProvider>
+      <ProtectedApp />
+      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+    </AuthProvider>
+  );
 }

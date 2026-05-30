@@ -1,19 +1,14 @@
-const STATUS = {
-  pendiente: 'bg-slate-100 text-slate-700 border-slate-200',
-  asignada: 'bg-blue-50 text-blue-700 border-blue-200',
-  en_proceso: 'bg-amber-50 text-amber-700 border-amber-200',
-  completada: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  cancelada: 'bg-red-50 text-red-700 border-red-200',
-  aprobada: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  rechazada: 'bg-red-50 text-red-700 border-red-200',
-  operativo: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  mantenimiento: 'bg-amber-50 text-amber-700 border-amber-200',
-  falla: 'bg-red-50 text-red-700 border-red-200',
-  alta: 'bg-red-50 text-red-700 border-red-200',
-  critica: 'bg-red-100 text-red-800 border-red-300',
-  media: 'bg-amber-50 text-amber-700 border-amber-200',
-  baja: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-};
-export default function Badge({ value }) {
-  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS[value] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>{String(value || '—').replaceAll('_', ' ')}</span>;
+import { ST } from "../../utils/constants";
+
+// Named export for use by pages that import { Badge }
+export function Badge({ s, label }) {
+  const c = ST[s] || { label: s, cls: "text-gray-600 bg-gray-100 border-gray-300" };
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold ${c.cls}`}>
+      {label || c.label}
+    </span>
+  );
 }
+
+// Default export for backward-compat with old import style
+export default Badge;

@@ -1,19 +1,14 @@
-import { useMemo } from 'react';
-import { PERMISSIONS } from '../utils/constants';
-import { useAuth } from './useAuth';
-
-export function hasPermission(role, permission) {
-  const permissions = PERMISSIONS[role] || [];
-  return permissions.includes('*') || permissions.includes(permission);
-}
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
+import { can, canAny, canAll } from "../utils/permissions";
 
 export function usePermissions() {
-  const { user } = useAuth();
-  return useMemo(() => {
-    const role = user?.role;
-    const can = permission => hasPermission(role, permission);
-    const canAny = permissions => permissions.some(can);
-    const canAll = permissions => permissions.every(can);
-    return { role, can, canAny, canAll, permissions: PERMISSIONS[role] || [] };
-  }, [user?.role]);
+  const { user } = useContext(AuthContext);
+  const role = user?.role || "";
+  return {
+    can: (permission) => can(role, permission),
+    canAny: (permissions) => canAny(role, permissions),
+    canAll: (permissions) => canAll(role, permissions),
+    role,
+  };
 }

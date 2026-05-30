@@ -1,3 +1,12 @@
+import { Toaster } from "react-hot-toast";
+
+export function ToastContainer() {
+  return <Toaster position="top-right" toastOptions={{ duration: 3000 }}/>;
+}
+
+export { default as toast } from "react-hot-toast";
+
+// Legacy default export kept for backward-compat
 export default function Toast({ message, type = 'success', onClose }) {
   if (!message) return null;
   const cls = type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700';
