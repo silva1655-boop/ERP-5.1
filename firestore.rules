@@ -34,50 +34,20 @@ service cloud.firestore {
       return userDoc(companyId).data.role;
     }
 
-    function hasRole(companyId, roles) {
-      return belongsToCompany(companyId) && role(companyId) in roles;
-    }
-
     function isSuperAdmin(companyId) {
-      return hasRole(companyId, ['superadmin']);
+      return belongsToCompany(companyId) && role(companyId) == 'superadmin';
     }
 
     function isCompanyAdmin(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa']);
+      return belongsToCompany(companyId) && role(companyId) in ['superadmin', 'admin_empresa'];
+    }
+
+    function canManageMaintenance(companyId) {
+      return belongsToCompany(companyId) && role(companyId) in ['superadmin', 'admin_empresa', 'supervisor'];
     }
 
     function canReadCompany(companyId) {
       return belongsToCompany(companyId);
-    }
-
-    function canManageWorkOrders(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor']);
-    }
-
-    function canManageRequests(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa']);
-    }
-
-    function canApproveRequests(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor']);
-    }
-
-    function canCreateRequests(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa', 'operaciones']);
-    }
-
-    function canCreateChecklists(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones', 'mecanico', 'operador']);
-    }
-
-    function canWriteCounter(companyId) {
-      return belongsToCompany(companyId)
-        && (
-          isCompanyAdmin(companyId)
-          || (request.resource.data.prefix == 'SOL' && role(companyId) == 'operaciones')
-          || (request.resource.data.prefix == 'CHK' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
-          || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) == 'supervisor')
-        );
     }
 
     match /companies/{companyId} {
@@ -95,44 +65,39 @@ service cloud.firestore {
 
       match /equipment/{equipmentId} {
         allow read: if canReadCompany(companyId);
-        allow create, update, delete: if isCompanyAdmin(companyId);
+        allow create, update, delete: if canManageMaintenance(companyId);
       }
 
       match /workOrders/{workOrderId} {
         allow read: if canReadCompany(companyId);
-        allow create: if canManageWorkOrders(companyId);
-        allow delete: if isCompanyAdmin(companyId);
-        allow update: if canManageWorkOrders(companyId)
-          || (hasRole(companyId, ['mecanico'])
+        allow create, delete: if canManageMaintenance(companyId);
+        allow update: if canManageMaintenance(companyId)
+          || (belongsToCompany(companyId)
+              && role(companyId) == 'mecanico'
               && resource.data.assignedTo == request.auth.uid
               && request.resource.data.assignedTo == resource.data.assignedTo);
       }
 
       match /requests/{requestId} {
         allow read: if canReadCompany(companyId);
-        allow create: if canCreateRequests(companyId)
-          && request.resource.data.status == 'pendiente'
-          && request.resource.data.requestedById == request.auth.uid;
-        allow update: if canManageRequests(companyId) || canApproveRequests(companyId);
-        allow delete: if isCompanyAdmin(companyId);
+        allow create: if belongsToCompany(companyId) && role(companyId) in ['superadmin', 'admin_empresa', 'supervisor', 'operaciones'];
+        allow update, delete: if canManageMaintenance(companyId);
       }
 
       match /checklists/{checklistId} {
         allow read: if canReadCompany(companyId);
-        allow create: if canCreateChecklists(companyId)
-          && request.resource.data.operatorId == request.auth.uid;
-        allow update: if isCompanyAdmin(companyId);
-        allow delete: if isCompanyAdmin(companyId);
+        allow create: if belongsToCompany(companyId) && role(companyId) in ['superadmin', 'admin_empresa', 'supervisor', 'operaciones', 'mecanico', 'operador'];
+        allow update, delete: if canManageMaintenance(companyId);
       }
 
       match /maintenancePlans/{planId} {
         allow read: if canReadCompany(companyId);
-        allow create, update, delete: if isCompanyAdmin(companyId);
+        allow create, update, delete: if canManageMaintenance(companyId);
       }
 
       match /spareParts/{partId} {
         allow read: if canReadCompany(companyId);
-        allow create, update, delete: if isCompanyAdmin(companyId);
+        allow create, update, delete: if canManageMaintenance(companyId);
       }
 
       match /settings/{settingId} {
@@ -142,12 +107,12 @@ service cloud.firestore {
 
       match /counters/{counterName} {
         allow read: if canReadCompany(companyId);
-        allow create, update: if canWriteCounter(companyId);
+        allow create, update: if canManageMaintenance(companyId);
         allow delete: if isCompanyAdmin(companyId);
       }
 
       match /auditLogs/{logId} {
-        allow read: if isCompanyAdmin(companyId) || canManageWorkOrders(companyId);
+        allow read: if isCompanyAdmin(companyId) || canManageMaintenance(companyId);
         allow create: if belongsToCompany(companyId);
         allow update, delete: if false;
       }
