@@ -1,9 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Badge from '../components/common/Badge';
 import LoadingState from '../components/common/LoadingState';
+import Toast from '../components/common/Toast';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
+import { usePermissions } from '../hooks/usePermissions';
 import { formatDate } from '../utils/dates';
+import { seedNavimagEquipment } from '../services/equipmentSeedService';
+import { handleError } from '../utils/errorHandler';
 import EntityPage from './EntityPage';
 
 const operationalStates = [
@@ -56,8 +60,35 @@ function OperationalEquipmentBoard() {
   </section>;
 }
 
+
+function EquipmentSeedPanel() {
+  const { companyId, user } = useAuth();
+  const { canAny } = usePermissions();
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  if (!canAny(['equipment.manage'])) return null;
+
+  const seed = async () => {
+    if (!window.confirm('Se cargarán equipos Navimag solo si no existen por código/TAG. ¿Continuar?')) return;
+    setLoading(true);
+    try {
+      const result = await seedNavimagEquipment(companyId, user);
+      setToast({ type: 'success', message: `Seed completado: ${result.created.length} creados, ${result.skipped.length} existentes.` });
+    } catch (error) {
+      setToast({ type: 'error', message: handleError(error) });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold">Carga inicial de equipos Navimag</p><p className="text-blue-700">Crea tractos, grúas horquilla y Lifttec solo si no existen por código/TAG.</p></div><button disabled={loading} onClick={seed} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60">{loading ? 'Cargando...' : 'Cargar equipos preestablecidos'}</button></div>
+    <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)}/>
+  </div>;
+}
+
 export default function EquipmentPage({ navigationKey }) {
   const { user } = useAuth();
   if (navigationKey === 'equipmentStatus' || user?.role === 'operaciones') return <OperationalEquipmentBoard/>;
-  return <EntityPage type="equipment"/>;
+  return <><EquipmentSeedPanel/><EntityPage type="equipment"/></>;
 }

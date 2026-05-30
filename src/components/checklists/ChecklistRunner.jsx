@@ -4,7 +4,7 @@ import ChecklistTemplateSelector from './ChecklistTemplateSelector';
 import ChecklistProgress from './ChecklistProgress';
 import ChecklistItemCard from './ChecklistItemCard';
 import ChecklistSummary from './ChecklistSummary';
-import { getChecklistTemplate } from '../../utils/checklistTemplates';
+import { checklistTemplateOptions, getChecklistTemplate, getTemplateIdForEquipment } from '../../utils/checklistTemplates';
 import { savePreoperationalChecklist, buildChecklistFindings } from '../../services/checklistService';
 import { handleError } from '../../utils/errorHandler';
 
@@ -18,17 +18,26 @@ export default function ChecklistRunner({ companyId, user, equipment, canOverrid
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const selectedEquipment = equipment.find(item => item.id === form.equipmentId) || null;
+  const canOverrideTemplate = ['admin_empresa', 'superadmin'].includes(user?.role);
+  const expectedTemplateId = selectedEquipment ? getTemplateIdForEquipment(selectedEquipment) : templateId;
+  const templateOptions = canOverrideTemplate || !selectedEquipment ? checklistTemplateOptions : checklistTemplateOptions.filter(option => option.value === expectedTemplateId);
 
   const findings = useMemo(() => buildChecklistFindings(template, answers), [template, answers]);
   const groupedItems = useMemo(() => template.sections.map(section => ({ section, items: template.items.filter(item => item.section === section) })).filter(group => group.items.length), [template]);
 
   const setEquipment = equipmentId => {
     const next = equipment.find(item => item.id === equipmentId);
+    const nextTemplateId = next ? getTemplateIdForEquipment(next) : templateId;
+    if (!canOverrideTemplate && nextTemplateId !== templateId) {
+      setTemplateId(nextTemplateId);
+      setAnswers({});
+    }
     setForm(prev => ({ ...prev, equipmentId, terminal: prev.terminal || next?.terminal || '', hourmeter: next?.hourmeter ?? prev.hourmeter }));
   };
 
   const validate = () => {
     if (!selectedEquipment) return 'Debe seleccionar un equipo.';
+    if (!canOverrideTemplate && templateId !== getTemplateIdForEquipment(selectedEquipment)) return 'El checklist debe corresponder al tipo de equipo seleccionado.';
     if (form.hourmeter === '' || Number.isNaN(Number(form.hourmeter))) return 'Debe ingresar un horómetro numérico.';
     const currentHourmeter = Number(selectedEquipment.hourmeter || selectedEquipment.horometroActual || 0);
     if (!canOverrideHourmeter && Number(form.hourmeter) < currentHourmeter) return `El horómetro no puede ser menor al actual (${currentHourmeter}).`;
@@ -68,7 +77,7 @@ export default function ChecklistRunner({ companyId, user, equipment, canOverrid
           <p className="rounded-xl bg-white/15 px-3 py-2 text-sm">Operador: <b>{displayName(user)}</b></p>
         </div>
       </div>
-      <div className="p-4"><ChecklistTemplateSelector value={templateId} onChange={next => { setTemplateId(next); setAnswers({}); }}/></div>
+      <div className="p-4"><ChecklistTemplateSelector value={templateId} options={templateOptions} disabled={!canOverrideTemplate && !!selectedEquipment} note={!canOverrideTemplate && selectedEquipment ? 'Checklist seleccionado automáticamente según el tipo de equipo.' : ''} onChange={next => { setTemplateId(next); setAnswers({}); }}/></div>
     </div>
 
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -81,7 +90,7 @@ export default function ChecklistRunner({ companyId, user, equipment, canOverrid
         <FormField label="Turno"><input className={inputClass} value={form.shift} onChange={event => setForm({ ...form, shift: event.target.value })} placeholder="Opcional"/></FormField>
         <FormField label="Buque / faena"><input className={inputClass} value={form.vesselOrTask} onChange={event => setForm({ ...form, vesselOrTask: event.target.value })} placeholder="Opcional"/></FormField>
       </div>
-      {selectedEquipment && <div className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-4"><span><b>TAG:</b> {selectedEquipment.code || selectedEquipment.id}</span><span><b>Nombre:</b> {selectedEquipment.name || '—'}</span><span><b>Estado:</b> {selectedEquipment.status || '—'}</span><span><b>Horómetro previo:</b> {selectedEquipment.hourmeter ?? selectedEquipment.horometroActual ?? 0}</span></div>}
+      {selectedEquipment && <div className="mt-3 grid gap-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-5"><span><b>TAG:</b> {selectedEquipment.code || selectedEquipment.id}</span><span><b>Nombre:</b> {selectedEquipment.name || '—'}</span><span><b>Tipo:</b> {selectedEquipment.type || '—'}</span><span><b>Estado:</b> {selectedEquipment.status || '—'}</span><span><b>Horómetro previo:</b> {selectedEquipment.hourmeter ?? selectedEquipment.horometroActual ?? 0}</span></div>}
     </div>
 
     <ChecklistProgress total={template.items.length} answers={answers}/>

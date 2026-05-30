@@ -37,15 +37,15 @@ const entityConfig = {
     editPermissions: ['equipment.manage'],
     deletePermissions: ['equipment.manage'],
     collection: 'equipment',
-    search: ['code', 'name', 'status', 'terminal'],
+    search: ['code', 'name', 'type', 'status', 'terminal', 'chassis'],
     required: ['code', 'name', 'type', 'status'],
     defaults: { status: 'operativo', criticality: 'B', active: true, hourmeter: 0, odometer: 0 },
     fields: [
-      ['code', 'Código'], ['name', 'Nombre'], ['brand', 'Marca'], ['model', 'Modelo'], ['serialNumber', 'Serie'], ['plate', 'Patente'], ['type', 'Tipo'], ['terminal', 'Terminal'],
-      ['status', 'Estado', 'select', EQUIPMENT_STATUS], ['criticality', 'Criticidad', 'select', ['A', 'B', 'C']], ['hourmeter', 'Horómetro', 'number'], ['odometer', 'Odómetro', 'number'],
+      ['code', 'Código / TAG'], ['name', 'Nombre'], ['type', 'Tipo', 'select', ['tracto', 'grua_horquilla', 'lifttec', 'otro']], ['category', 'Categoría'], ['brand', 'Marca'], ['model', 'Modelo'], ['year', 'Año fabricación', 'number'], ['chassis', 'Chasis'], ['serialNumber', 'Serie'], ['plate', 'Patente'], ['terminal', 'Terminal'],
+      ['status', 'Estado', 'select', EQUIPMENT_STATUS], ['criticality', 'Criticidad', 'select', ['A', 'B', 'C']], ['hourmeter', 'Horómetro', 'number'], ['odometer', 'Odómetro', 'number'], ['active', 'Activo', 'select', ['true', 'false']],
     ],
     columns: [
-      { key: 'code', label: 'Código' }, { key: 'name', label: 'Equipo' }, { key: 'type', label: 'Tipo' }, { key: 'terminal', label: 'Terminal' }, { key: 'status', label: 'Estado', render: row => <Badge value={row.status}/> }, { key: 'criticality', label: 'Crit.' },
+      { key: 'code', label: 'Código' }, { key: 'name', label: 'Equipo' }, { key: 'type', label: 'Tipo' }, { key: 'chassis', label: 'Chasis' }, { key: 'terminal', label: 'Terminal' }, { key: 'status', label: 'Estado', render: row => <Badge value={row.status}/> }, { key: 'criticality', label: 'Crit.' },
     ],
   },
   workOrders: {
@@ -211,6 +211,7 @@ function WorkOrderForm({ value, onChange, errors, equipment, users }) {
       equipmentCode: nextEquipment?.code || nextEquipment?.id || '',
       equipmentName: nextEquipment?.name || nextEquipment?.type || '',
       equipmentType: nextEquipment?.type || nextEquipment?.equipmentType || '',
+      chassis: nextEquipment?.chassis || '',
       terminal: nextEquipment?.terminal || value.terminal || '',
     });
   };
@@ -226,9 +227,10 @@ function WorkOrderForm({ value, onChange, errors, equipment, users }) {
   };
   return <div className="grid gap-4 md:grid-cols-2">
     <FormField label="Título" error={errors.title}><Input fieldKey="title" type="text" value={value.title || ''} onChange={next => onChange({ ...value, title: next })}/></FormField>
-    <FormField label="Equipo" error={errors.equipmentId}><select className={inputClass} value={value.equipmentId || ''} onChange={event => setEquipment(event.target.value)}><option value="">Seleccione equipo</option>{equipment.map(item => <option key={item.id} value={item.id}>{item.code || item.id} · {item.name || 'Sin nombre'} · {item.type || 'Sin tipo'}</option>)}</select></FormField>
+    <FormField label="Equipo" error={errors.equipmentId}><select className={inputClass} value={value.equipmentId || ''} onChange={event => setEquipment(event.target.value)}><option value="">Seleccione equipo</option>{equipment.map(item => <option key={item.id} value={item.id}>{item.code || item.id} · {item.name || 'Sin nombre'} · {item.type || 'Sin tipo'} · {item.status || 's/e'}</option>)}</select></FormField>
     <FormField label="Código equipo"><Input fieldKey="equipmentCode" type="text" value={value.equipmentCode || ''} onChange={() => {}} disabled/></FormField>
     <FormField label="Tipo equipo"><Input fieldKey="equipmentType" type="text" value={value.equipmentType || ''} onChange={() => {}} disabled/></FormField>
+    <FormField label="Chasis"><Input fieldKey="chassis" type="text" value={value.chassis || ''} onChange={() => {}} disabled/></FormField>
     <FormField label="Tipo OT"><Input fieldKey="type" type="select" options={['correctiva', 'preventiva', 'operacional']} value={value.type || 'correctiva'} onChange={next => onChange({ ...value, type: next })}/></FormField>
     <FormField label="Estado"><Input fieldKey="status" type="select" options={WORK_ORDER_STATUS} value={value.status || 'en_planificacion'} onChange={next => onChange({ ...value, status: next })}/></FormField>
     <FormField label="Prioridad" error={errors.priority}><Input fieldKey="priority" type="select" options={PRIORITIES} value={value.priority || 'media'} onChange={next => onChange({ ...value, priority: next })}/></FormField>
@@ -249,10 +251,15 @@ function buildPayload({ type, config, form, user, canChangeStatus, equipment }) 
   const chosenEquipment = selectEquipment(equipment, payload.equipmentId);
   if (chosenEquipment) payload.equipmentCode = payload.equipmentCode || chosenEquipment.code || '';
 
+  if (type === 'equipment') {
+    payload.active = payload.active === true || payload.active === 'true';
+  }
+
   if (type === 'workOrders') {
     payload.equipmentCode = payload.equipmentCode || chosenEquipment?.code || '';
     payload.equipmentName = payload.equipmentName || chosenEquipment?.name || chosenEquipment?.type || '';
     payload.equipmentType = payload.equipmentType || chosenEquipment?.type || '';
+    payload.chassis = payload.chassis || chosenEquipment?.chassis || '';
     payload.terminal = payload.terminal || chosenEquipment?.terminal || '';
     if (!payload.assignedToId && payload.assignedTo && payload.assignedToName) payload.assignedToId = payload.assignedTo;
     payload.status = payload.assignedToId && payload.dueDate && ['en_planificacion', 'pendiente_planificacion', 'pendiente_asignacion', 'pendiente', 'asignada'].includes(payload.status || '') ? 'programada' : (payload.status || 'en_planificacion');

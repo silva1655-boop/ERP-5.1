@@ -5,17 +5,12 @@ export const CHECKLIST_ITEM_STATUS = {
   na: 'No aplica',
 };
 
-export const CHECKLIST_STATUS_LABELS = {
-  good: 'Bueno',
-  conditional: 'Condicional',
-  bad: 'Malo',
-  na: 'No aplica',
-};
+export const CHECKLIST_STATUS_LABELS = CHECKLIST_ITEM_STATUS;
 
 const criteria = name => ({
   good: `${name}: condición normal, funcional y segura para operar.`,
-  conditional: `${name}: desviación controlable; requiere observación, seguimiento o programación de corrección.`,
-  bad: `${name}: falla, condición insegura o defecto que requiere detención/revisión inmediata.`,
+  conditional: `${name}: condición aceptable con restricción; requiere observación y seguimiento.`,
+  bad: `${name}: condición insegura o falla que requiere detención, fotografía y revisión inmediata.`,
 });
 
 const item = (id, section, name, method, criticality = 'media', extra = {}) => ({
@@ -33,138 +28,114 @@ const item = (id, section, name, method, criticality = 'media', extra = {}) => (
   ...extra,
 });
 
-const tractoSections = [
-  'Identificación del equipo',
-  'Estado general',
-  'Motor',
-  'Sistema hidráulico',
-  'Sistema eléctrico',
-  'Neumáticos',
-  'Frenos',
-  'Quinta rueda',
-  'Luces',
-  'Cabina',
-  'Seguridad',
-  'Observaciones finales',
+const buildItems = sections => sections.flatMap(section => section.items.map(entry => item(
+  entry.id,
+  section.name,
+  entry.name,
+  entry.method || `Inspeccionar y probar: ${entry.name}.`,
+  entry.criticality || 'media',
+  entry.extra || {},
+)));
+
+const tractoSectionsConfig = [
+  { name: 'Identificación', items: [
+    { id: 'tag_visible', name: 'TAG / código visible' },
+    { id: 'patente_identificacion', name: 'Patente o identificación interna si aplica', criticality: 'baja' },
+    { id: 'horometro', name: 'Horómetro', criticality: 'media', extra: { hasLevel: true, levelRef: 'hourmeter' } },
+    { id: 'combustible', name: 'Nivel de combustible', extra: { hasLevel: true, levelRef: 'fuel' } },
+    { id: 'terminal_faena', name: 'Terminal / faena', criticality: 'baja' },
+  ] },
+  { name: 'Cabina y seguridad', items: ['Cinturón de seguridad', 'Bocina', 'Alarma de retroceso', 'Baliza', 'Espejos', 'Extintor', 'Limpieza y orden de cabina'].map((name, index) => ({ id: `cabina_${index}`, name, criticality: ['Cinturón de seguridad', 'Alarma de retroceso'].includes(name) ? 'alta' : 'media' })) },
+  { name: 'Motor y fluidos', items: ['Nivel aceite motor', 'Nivel refrigerante', 'Fugas visibles de aceite', 'Fugas visibles de refrigerante', 'Fugas visibles de combustible', 'Estado correas/mangueras visibles'].map((name, index) => ({ id: `motor_${index}`, name, criticality: name.includes('Fugas') ? 'alta' : 'media', extra: name.startsWith('Nivel') ? { hasLevel: true, levelRef: name.toLowerCase().replaceAll(' ', '_') } : {} })) },
+  { name: 'Sistema eléctrico y luces', items: ['Luces delanteras', 'Luces traseras', 'Luces de freno', 'Luces de retroceso', 'Intermitentes', 'Tablero sin alarmas críticas'].map((name, index) => ({ id: `electrico_${index}`, name, criticality: name.includes('alarmas') ? 'alta' : 'media' })) },
+  { name: 'Neumáticos y ruedas', items: ['Estado neumáticos delanteros', 'Estado neumáticos traseros', 'Tuercas visibles', 'Presión visual adecuada', 'Cortes o deformaciones'].map((name, index) => ({ id: `neumaticos_${index}`, name, criticality: 'alta' })) },
+  { name: 'Frenos y aire', items: ['Presión de aire correcta', 'Freno de servicio', 'Freno estacionamiento', 'Fugas de aire audibles', 'Acople líneas de aire'].map((name, index) => ({ id: `frenos_${index}`, name, criticality: 'alta' })) },
+  { name: 'Quinta rueda / acople', items: ['Estado quinta rueda', 'Seguro de quinta rueda', 'Lubricación quinta rueda', 'Mangueras y conexiones al acoplado', 'Pasador / sistema de bloqueo'].map((name, index) => ({ id: `quinta_${index}`, name, criticality: 'alta' })) },
+  { name: 'Sistema hidráulico si aplica', items: ['Nivel hidráulico', 'Fugas hidráulicas', 'Mangueras hidráulicas visibles', 'Acoples hidráulicos'].map((name, index) => ({ id: `hidraulico_${index}`, name, criticality: name.includes('Fugas') ? 'alta' : 'media', extra: name.includes('Nivel') ? { hasLevel: true, levelRef: 'nivel_hidraulico' } : {} })) },
+  { name: 'Prueba operacional', items: ['Dirección', 'Avance / retroceso', 'Respuesta de acelerador', 'Ruidos anormales', 'Vibraciones anormales'].map((name, index) => ({ id: `prueba_${index}`, name, criticality: ['Ruidos anormales', 'Vibraciones anormales'].includes(name) ? 'alta' : 'media' })) },
 ];
 
-const gruaSections = [
-  'Identificación del equipo',
-  'Estado general',
-  'Motor',
-  'Sistema hidráulico',
-  'Sistema eléctrico',
-  'Estabilizadores',
-  'Pluma / brazo',
-  'Gancho / cable / accesorios',
-  'Neumáticos o tren de rodado',
-  'Frenos',
-  'Luces',
-  'Seguridad',
-  'Observaciones finales',
+const gruaHorquillaSectionsConfig = [
+  { name: 'Identificación', items: ['TAG / código visible', 'Horómetro', 'Combustible o carga de batería si aplica', 'Terminal / faena'].map((name, index) => ({ id: `gh_id_${index}`, name, extra: name.includes('Horómetro') || name.includes('Combustible') ? { hasLevel: true, levelRef: name.toLowerCase().replaceAll(' ', '_') } : {} })) },
+  { name: 'Seguridad', items: ['Cinturón', 'Bocina', 'Alarma de retroceso', 'Baliza', 'Espejos', 'Extintor', 'Techo protector', 'Respaldo de carga'].map((name, index) => ({ id: `gh_seg_${index}`, name, criticality: ['Cinturón', 'Alarma de retroceso', 'Techo protector', 'Respaldo de carga'].includes(name) ? 'alta' : 'media' })) },
+  { name: 'Motor / energía', items: ['Nivel aceite motor', 'Nivel refrigerante', 'Fugas de aceite', 'Fugas de combustible', 'Estado batería', 'Tablero sin alarmas críticas'].map((name, index) => ({ id: `gh_motor_${index}`, name, criticality: name.includes('Fugas') || name.includes('alarmas') ? 'alta' : 'media', extra: name.startsWith('Nivel') ? { hasLevel: true, levelRef: name.toLowerCase().replaceAll(' ', '_') } : {} })) },
+  { name: 'Sistema hidráulico', items: ['Nivel hidráulico', 'Fugas hidráulicas', 'Cilindros de levante', 'Cilindro de inclinación', 'Mangueras hidráulicas', 'Acoples visibles'].map((name, index) => ({ id: `gh_hid_${index}`, name, criticality: 'alta', extra: name.includes('Nivel') ? { hasLevel: true, levelRef: 'nivel_hidraulico' } : {} })) },
+  { name: 'Mástil y horquillas', items: ['Estado mástil', 'Cadenas de levante', 'Rodillos', 'Horquillas sin fisuras ni deformación', 'Seguro de horquillas', 'Desplazador lateral si aplica'].map((name, index) => ({ id: `gh_mastil_${index}`, name, criticality: 'alta' })) },
+  { name: 'Neumáticos y ruedas', items: ['Estado neumáticos', 'Cortes o desgaste', 'Tuercas visibles', 'Llantas sin daño visible'].map((name, index) => ({ id: `gh_neu_${index}`, name, criticality: 'alta' })) },
+  { name: 'Frenos y dirección', items: ['Freno de servicio', 'Freno de estacionamiento', 'Dirección', 'Juego excesivo en dirección'].map((name, index) => ({ id: `gh_frenos_${index}`, name, criticality: 'alta' })) },
+  { name: 'Prueba operacional', items: ['Levante', 'Descenso', 'Inclinación adelante / atrás', 'Avance', 'Retroceso', 'Ruidos anormales', 'Vibraciones anormales'].map((name, index) => ({ id: `gh_prueba_${index}`, name, criticality: ['Ruidos anormales', 'Vibraciones anormales'].includes(name) ? 'alta' : 'media' })) },
 ];
+
+const lifttecSectionsConfig = [
+  { name: 'Identificación', items: ['TAG / código visible', 'Terminal', 'Horómetro si aplica'].map((name, index) => ({ id: `lf_id_${index}`, name, extra: name.includes('Horómetro') ? { hasLevel: true, levelRef: 'hourmeter' } : {} })) },
+  { name: 'Seguridad', items: ['Bocina', 'Alarma retroceso', 'Baliza', 'Luces', 'Extintor'].map((name, index) => ({ id: `lf_seg_${index}`, name, criticality: ['Alarma retroceso', 'Luces'].includes(name) ? 'alta' : 'media' })) },
+  { name: 'Estructura', items: ['Estado general estructura', 'Fisuras visibles', 'Golpes o deformaciones', 'Puntos de anclaje'].map((name, index) => ({ id: `lf_est_${index}`, name, criticality: name.includes('Fisuras') ? 'alta' : 'media' })) },
+  { name: 'Hidráulico', items: ['Fugas hidráulicas', 'Mangueras', 'Cilindros', 'Acoples'].map((name, index) => ({ id: `lf_hid_${index}`, name, criticality: 'alta' })) },
+  { name: 'Neumáticos / rodado', items: ['Estado neumáticos', 'Tuercas', 'Desgaste'].map((name, index) => ({ id: `lf_rodado_${index}`, name, criticality: 'media' })) },
+  { name: 'Prueba operacional', items: ['Movimiento principal', 'Dirección', 'Frenos', 'Ruidos anormales'].map((name, index) => ({ id: `lf_prueba_${index}`, name, criticality: ['Frenos', 'Ruidos anormales'].includes(name) ? 'alta' : 'media' })) },
+];
+
+const makeTemplate = ({ id, label, equipmentType, description, fuelLabel, fuelOptions, sections }) => ({
+  id,
+  label,
+  equipmentType,
+  description,
+  fuelLabel,
+  fuelOptions,
+  sections: sections.map(section => section.name),
+  items: buildItems(sections),
+});
 
 export const checklistTemplates = {
-  tracto: {
+  tracto: makeTemplate({
     id: 'tracto',
-    label: 'Tracto',
-    equipmentType: 'Tracto',
-    description: 'Inspección preoperacional móvil para tractos, terminal tractors y equipos de arrastre.',
-    fuelLabel: 'Combustible',
+    label: 'Tracto portuario',
+    equipmentType: 'tracto',
+    description: 'Inspección preoperacional real para tractos portuarios y terminal tractors.',
+    fuelLabel: 'Nivel de combustible',
     fuelOptions: ['E', '1/4', '1/2', '3/4', 'F'],
-    sections: tractoSections,
-    items: [
-      item('identificacion_tag', 'Identificación del equipo', 'TAG / código visible', 'Confirmar que el TAG o código corresponde al equipo seleccionado.', 'media'),
-      item('identificacion_documentos', 'Identificación del equipo', 'Documentación / permisos visibles', 'Verificar que documentación operacional requerida esté disponible si aplica.', 'baja'),
-      item('carroceria_general', 'Estado general', 'Estado general de carrocería y chasis', 'Inspeccionar golpes, deformaciones, corrosión, piezas sueltas o daños visibles.', 'media'),
-      item('fugas_generales', 'Estado general', 'Fugas visibles bajo el equipo', 'Revisar piso y bajos del tracto antes de moverlo.', 'alta'),
-      item('aceite_motor', 'Motor', 'Nivel aceite motor', 'Verificar varilla o indicador de nivel.', 'alta', { hasLevel: true, levelRef: 'aceite_motor' }),
-      item('refrigerante', 'Motor', 'Nivel refrigerante', 'Inspeccionar depósito, tapas y posibles alertas.', 'alta', { hasLevel: true, levelRef: 'refrigerante' }),
-      item('fugas_motor_transmision', 'Motor', 'Fugas visibles motor/transmisión', 'Revisar motor, caja, mangueras y conexiones.', 'alta'),
-      item('ruidos_motor', 'Motor', 'Ruido / vibración anormal del motor', 'Arrancar y escuchar funcionamiento antes de operar.', 'alta'),
-      item('brazo_hidraulico', 'Sistema hidráulico', 'Brazo de elevación / sistema hidráulico', 'Probar operación, ruidos, holguras y respuesta hidráulica.', 'alta'),
-      item('aceite_hidraulico', 'Sistema hidráulico', 'Nivel aceite hidráulico', 'Verificar indicador o visor de nivel.', 'alta', { hasLevel: true, levelRef: 'aceite_hidraulico' }),
-      item('mangueras_hidraulicas', 'Sistema hidráulico', 'Mangueras y acoples hidráulicos', 'Inspeccionar desgaste, fugas, rozaduras y fijaciones.', 'alta'),
-      item('bateria_conexiones', 'Sistema eléctrico', 'Batería y conexiones', 'Revisar bornes, fijación, sulfatación y cables visibles.', 'media'),
-      item('tablero_indicadores', 'Sistema eléctrico', 'Tablero e indicadores', 'Comprobar alertas, indicadores y testigos al energizar.', 'media'),
-      item('neumatico_di', 'Neumáticos', 'Estado neumático delantero izquierdo', 'Inspección visual de cortes, desgaste y presión aparente.', 'alta'),
-      item('neumatico_dd', 'Neumáticos', 'Estado neumático delantero derecho', 'Inspección visual de cortes, desgaste y presión aparente.', 'alta'),
-      item('neumatico_ti', 'Neumáticos', 'Estado neumático trasero izquierdo', 'Inspección visual de cortes, desgaste y presión aparente.', 'alta'),
-      item('neumatico_td', 'Neumáticos', 'Estado neumático trasero derecho', 'Inspección visual de cortes, desgaste y presión aparente.', 'alta'),
-      item('presion_neumaticos', 'Neumáticos', 'Presión/condición visual neumáticos', 'Verificar presión aparente, tuercas y condición general.', 'media'),
-      item('freno_servicio', 'Frenos', 'Frenos de servicio', 'Probar respuesta de frenado a baja velocidad antes de operar.', 'alta'),
-      item('freno_estacionamiento', 'Frenos', 'Freno de estacionamiento', 'Comprobar retención del equipo detenido.', 'alta'),
-      item('quinta_rueda', 'Quinta rueda', 'Quinta rueda', 'Verificar lubricación, fisuras, fijación y operación de seguros.', 'alta'),
-      item('clavijas_seguros', 'Quinta rueda', 'Clavijas o seguros de cabina', 'Comprobar presencia, fijación y condición de seguros.', 'alta'),
-      item('luces_delanteras', 'Luces', 'Luces delanteras', 'Encender y verificar funcionamiento.', 'media'),
-      item('luces_traseras', 'Luces', 'Luces traseras', 'Encender y verificar funcionamiento.', 'media'),
-      item('baliza', 'Luces', 'Baliza', 'Verificar giro/destello visible.', 'media'),
-      item('alarma_retroceso', 'Luces', 'Alarma de retroceso', 'Enganchar reversa y verificar alarma.', 'alta'),
-      item('cabina_controles', 'Cabina', 'Cabina y controles', 'Revisar tablero, comandos, asiento y condición interior.', 'media'),
-      item('espejos', 'Cabina', 'Espejos', 'Verificar presencia, fijación, limpieza y visibilidad.', 'media'),
-      item('limpiaparabrisas', 'Cabina', 'Limpiaparabrisas', 'Probar barrido y estado de plumillas.', 'baja'),
-      item('cinturon', 'Seguridad', 'Cinturón de seguridad', 'Verificar anclaje, bloqueo y estado de cinta.', 'alta'),
-      item('bocina', 'Seguridad', 'Bocina', 'Probar señal sonora.', 'media'),
-      item('extintor', 'Seguridad', 'Extintor si aplica', 'Verificar presencia, presión, sello y vencimiento.', 'media'),
-      item('observaciones_finales', 'Observaciones finales', 'Condición final para operar', 'Registrar cualquier condición relevante no cubierta por otros ítems.', 'media'),
-    ],
-  },
-  grua: {
-    id: 'grua',
-    label: 'Grúa',
-    equipmentType: 'Grúa',
-    description: 'Inspección preoperacional para grúas con pluma, brazo, gancho, cables y estabilizadores.',
-    fuelLabel: 'Combustible / energía',
+    sections: tractoSectionsConfig,
+  }),
+  grua_horquilla: makeTemplate({
+    id: 'grua_horquilla',
+    label: 'Grúa horquilla Komatsu',
+    equipmentType: 'grua_horquilla',
+    description: 'Checklist operacional para grúa horquilla Komatsu.',
+    fuelLabel: 'Combustible / batería',
     fuelOptions: ['E', '1/4', '1/2', '3/4', 'F', 'Batería baja', 'Batería media', 'Batería completa'],
-    sections: gruaSections,
-    items: [
-      item('identificacion_tag', 'Identificación del equipo', 'TAG / código visible', 'Confirmar que el TAG o código corresponde al equipo seleccionado.', 'media'),
-      item('documentacion_capacidad', 'Identificación del equipo', 'Tabla de carga / documentación visible', 'Verificar disponibilidad de tabla de carga, permiso o documentación aplicable.', 'alta'),
-      item('estructura_general', 'Estado general', 'Estructura general y chasis', 'Inspeccionar golpes, fisuras, deformaciones, corrosión o partes sueltas.', 'alta'),
-      item('fugas_generales', 'Estado general', 'Fugas visibles bajo el equipo', 'Revisar piso, bajos, motor y zonas hidráulicas.', 'alta'),
-      item('aceite_motor', 'Motor', 'Nivel aceite motor', 'Verificar varilla o indicador.', 'alta', { hasLevel: true, levelRef: 'aceite_motor' }),
-      item('refrigerante', 'Motor', 'Nivel refrigerante', 'Revisar depósito, tapas y alertas.', 'alta', { hasLevel: true, levelRef: 'refrigerante' }),
-      item('ruidos_motor', 'Motor', 'Ruido / vibración anormal del motor', 'Arrancar y escuchar funcionamiento antes de operar.', 'alta'),
-      item('aceite_hidraulico', 'Sistema hidráulico', 'Nivel aceite hidráulico', 'Verificar visor o indicador de nivel.', 'alta', { hasLevel: true, levelRef: 'aceite_hidraulico' }),
-      item('cilindros_hidraulicos', 'Sistema hidráulico', 'Cilindros hidráulicos', 'Inspeccionar vástagos, sellos, fugas y fijaciones.', 'alta'),
-      item('mangueras_hidraulicas', 'Sistema hidráulico', 'Mangueras hidráulicas', 'Revisar fugas, rozaduras, cortes y acoples.', 'alta'),
-      item('tablero_indicadores', 'Sistema eléctrico', 'Tablero e indicadores', 'Comprobar alertas, limitadores y testigos al energizar.', 'alta'),
-      item('bateria_conexiones', 'Sistema eléctrico', 'Batería y conexiones', 'Revisar bornes, fijación y cables visibles.', 'media'),
-      item('estabilizadores_estado', 'Estabilizadores', 'Estabilizadores', 'Probar extensión/retracción, apoyos, fisuras y fijación.', 'alta'),
-      item('patines_apoyo', 'Estabilizadores', 'Patines / apoyos de estabilizadores', 'Verificar estado, pasadores y superficie de apoyo.', 'alta'),
-      item('pluma_brazo', 'Pluma / brazo', 'Pluma / brazo', 'Inspeccionar fisuras, deformación, soldaduras y holguras.', 'alta'),
-      item('extension_pluma', 'Pluma / brazo', 'Extensión / retracción de pluma', 'Probar movimientos suaves sin golpes, alarmas o bloqueos.', 'alta'),
-      item('gancho', 'Gancho / cable / accesorios', 'Gancho y pestillo de seguridad', 'Verificar deformación, giro, pestillo y seguro operativo.', 'alta'),
-      item('cable_cadena', 'Gancho / cable / accesorios', 'Cable / cadena / eslingas asociadas', 'Inspeccionar desgaste, hebras cortadas, aplastamiento o deformación.', 'alta'),
-      item('accesorios_izaje', 'Gancho / cable / accesorios', 'Accesorios de izaje', 'Verificar grilletes, seguros, identificación y condición visual.', 'alta'),
-      item('neumaticos_tren', 'Neumáticos o tren de rodado', 'Neumáticos o tren de rodado', 'Inspección visual de cortes, desgaste, presión aparente y rodado.', 'alta'),
-      item('tuercas_llantas', 'Neumáticos o tren de rodado', 'Tuercas, llantas o zapatas', 'Revisar fijaciones, fisuras, desgaste y condición general.', 'media'),
-      item('freno_servicio', 'Frenos', 'Frenos de servicio', 'Probar respuesta de frenado a baja velocidad.', 'alta'),
-      item('freno_estacionamiento', 'Frenos', 'Freno de estacionamiento', 'Comprobar retención del equipo detenido.', 'alta'),
-      item('luces_delanteras', 'Luces', 'Luces delanteras', 'Encender y verificar funcionamiento.', 'media'),
-      item('luces_traseras', 'Luces', 'Luces traseras', 'Encender y verificar funcionamiento.', 'media'),
-      item('baliza', 'Luces', 'Baliza', 'Verificar giro/destello visible.', 'media'),
-      item('alarma_retroceso', 'Luces', 'Alarma de retroceso', 'Enganchar reversa y verificar alarma.', 'alta'),
-      item('limitador_carga', 'Seguridad', 'Limitador / alarma de carga', 'Verificar funcionamiento o ausencia de alertas críticas.', 'alta'),
-      item('cinturon', 'Seguridad', 'Cinturón de seguridad', 'Verificar anclaje, bloqueo y estado de cinta.', 'alta'),
-      item('bocina', 'Seguridad', 'Bocina', 'Probar señal sonora.', 'media'),
-      item('extintor', 'Seguridad', 'Extintor', 'Verificar presencia, presión, sello y vencimiento.', 'media'),
-      item('observaciones_finales', 'Observaciones finales', 'Condición final para operar', 'Registrar cualquier condición relevante no cubierta por otros ítems.', 'media'),
-    ],
-  },
+    sections: gruaHorquillaSectionsConfig,
+  }),
+  lifttec: makeTemplate({
+    id: 'lifttec',
+    label: 'Lifttec',
+    equipmentType: 'lifttec',
+    description: 'Checklist general para equipos Lifttec.',
+    fuelLabel: 'Energía / combustible',
+    fuelOptions: ['No aplica', 'Bajo', 'Medio', 'Alto', 'Completo'],
+    sections: lifttecSectionsConfig,
+  }),
 };
 
-checklistTemplates.grua_horquilla = {
-  ...checklistTemplates.grua,
-  id: 'grua_horquilla',
-  label: 'Grúa horquilla / legacy',
-};
+checklistTemplates.grua = { ...checklistTemplates.grua_horquilla, id: 'grua' };
+
+export function normalizeEquipmentType(type = '') {
+  const value = String(type).toLowerCase().trim();
+  if (['tracto', 'terminal_tractor', 'tractor', 'tractos'].includes(value)) return 'tracto';
+  if (['grua_horquilla', 'grúa horquilla', 'grua horquilla', 'horquilla', 'komatsu', 'grua'].includes(value)) return 'grua_horquilla';
+  if (['lifttec', 'lift_tec'].includes(value)) return 'lifttec';
+  return value;
+}
+
+export function getTemplateIdForEquipment(equipment) {
+  const normalized = normalizeEquipmentType(equipment?.type || equipment?.equipmentType || '');
+  return checklistTemplates[normalized] ? normalized : 'tracto';
+}
 
 export function getChecklistTemplate(id) {
   return checklistTemplates[id] || checklistTemplates.tracto;
 }
 
-export const checklistTemplateOptions = [checklistTemplates.tracto, checklistTemplates.grua].map(template => ({ ...template, value: template.id }));
+export const checklistTemplateOptions = ['tracto', 'grua_horquilla', 'lifttec'].map(key => ({ ...checklistTemplates[key], value: key }));
 
 export function getChecklistTemplateOptions() {
   return checklistTemplateOptions;
