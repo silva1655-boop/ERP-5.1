@@ -1,109 +1,91 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../services/firebase';
-import { loginWithEmail, logout as authLogout, resetPassword as sendReset } from '../services/authService';
-import { getCompanySettings } from '../services/firestoreService';
-import { DEFAULT_COMPANY_SETTINGS } from '../utils/constants';
-import { handleError } from '../utils/errorHandler';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { auth, db } from '../services/firebase';
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { COLL } from '../utils/constants';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [companySettings, setCompanySettings] = useState(DEFAULT_COMPANY_SETTINGS);
+  const [user, setUser]     = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Restore legacy session from localStorage first (instant, no network)
-    const savedLegacy = localStorage.getItem('mantek_legacy_session');
-    if (savedLegacy) {
-      try {
-        const legacyProfile = JSON.parse(savedLegacy);
-        setProfile(legacyProfile);
-        setLoading(false);
-      } catch (_) {
-        localStorage.removeItem('mantek_legacy_session');
-      }
+    // Restore localStorage session instantly (no network needed)
+    const saved = localStorage.getItem('mantek_session');
+    if (saved) {
+      try { setUser(JSON.parse(saved)); } catch (_) { localStorage.removeItem('mantek_session'); }
     }
 
-    // Listen to Firebase Auth (for when Firebase Auth is enabled)
-    const unsubscribe = onAuthStateChanged(auth, async firebaseUserState => {
-      setError('');
-      try {
-        setFirebaseUser(firebaseUserState);
-        if (!firebaseUserState) {
-          // No Firebase Auth user — keep legacy profile if it exists
-          if (!localStorage.getItem('mantek_legacy_session')) {
-            setProfile(null);
-            setCompanySettings(DEFAULT_COMPANY_SETTINGS);
-          }
-          setLoading(false);
-          return;
-        }
-        // Firebase Auth user found — load their profile
-        const { resolveUserProfile } = await import('../services/authService');
-        const loadedProfile = await resolveUserProfile(firebaseUserState.uid);
-        if (!loadedProfile?.active) {
-          await authLogout();
-          throw Object.assign(new Error('Usuario inactivo'), { code: 'auth/user-disabled' });
-        }
-        setProfile(loadedProfile);
-        localStorage.removeItem('mantek_legacy_session'); // clear legacy if real auth works
+    // Listen to Firebase Auth (for when Auth is enabled in console)
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
         try {
-          const settings = await getCompanySettings(loadedProfile.companyId);
-          setCompanySettings({ ...DEFAULT_COMPANY_SETTINGS, ...(settings || {}) });
-        } catch (_) { /* settings non-fatal */ }
-      } catch (err) {
-        setError(handleError(err));
-        setProfile(null);
-      } finally {
-        setLoading(false);
+          const snap = await getDoc(doc(db, COLL, 'users'));
+          const users = snap.exists() ? (snap.data().data || []) : [];
+          const profile = users.find(u => u.email?.toLowerCase() === fbUser.email?.toLowerCase());
+          const sessionUser = profile
+            ? { ...profile }
+            : { uid: fbUser.uid, email: fbUser.email, role: 'operador', name: fbUser.email, avatar: '?' };
+          delete sessionUser.password;
+          setUser(sessionUser);
+          localStorage.setItem('mantek_session', JSON.stringify(sessionUser));
+        } catch (_) {
+          // Firestore unavailable — keep existing localStorage session
+        }
+      } else {
+        // No Firebase Auth — keep localStorage session if it exists
+        const saved = localStorage.getItem('mantek_session');
+        if (!saved) setUser(null);
       }
+      setLoading(false);
     });
-    return unsubscribe;
+
+    return unsub;
   }, []);
 
+  // Tries Firebase Auth first; falls back to Firestore users lookup (legacy)
   const login = useCallback(async (email, password) => {
-    setError('');
-    const { firebaseUser: fbUser, profile: prof } = await loginWithEmail(email, password);
-    if (!fbUser) {
-      // Legacy login — persist session and set profile directly
-      localStorage.setItem('mantek_legacy_session', JSON.stringify(prof));
-      setProfile(prof);
-      setFirebaseUser(null);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+      return { success: true };
+    } catch (_) {
+      // Firebase Auth not enabled or user not migrated yet — legacy lookup
+      try {
+        const snap = await getDoc(doc(db, COLL, 'users'));
+        const users = snap.exists() ? (snap.data().data || []) : [];
+        const found = users.find(
+          u => u.email?.toLowerCase() === email.trim().toLowerCase() && u.password === password
+        );
+        if (found) {
+          const sessionUser = { ...found };
+          delete sessionUser.password;
+          setUser(sessionUser);
+          localStorage.setItem('mantek_session', JSON.stringify(sessionUser));
+          return { success: true };
+        }
+        return { success: false, error: 'Credenciales incorrectas' };
+      } catch (dbErr) {
+        return { success: false, error: 'Error al conectar con la base de datos' };
+      }
     }
-    // Firebase Auth login is handled by onAuthStateChanged above
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem('mantek_legacy_session');
-    setProfile(null);
-    setFirebaseUser(null);
-    try { await authLogout(); } catch (_) {}
+    localStorage.removeItem('mantek_session');
+    setUser(null);
+    try { await signOut(auth); } catch (_) {}
   }, []);
 
-  const value = useMemo(() => ({
-    firebaseUser,
-    user: profile,
-    companyId: profile?.companyId || null,
-    isLegacy: profile?.companyId === 'legacy',
-    companySettings,
-    loading,
-    error,
-    isAuthenticated: Boolean(profile),
-    login,
-    logout,
-    resetPassword: sendReset,
-    setCompanySettings,
-  }), [firebaseUser, profile, companySettings, loading, error, login, logout]);
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: Boolean(user), login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth debe usarse dentro de AuthProvider');
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  return ctx;
 }

@@ -42,10 +42,9 @@ export function LoginPage() {
     if (!email || !pass) { setErr("Completa todos los campos"); return; }
     setLoading(true);
     setErr("");
-    try {
-      await login(email, pass);
-    } catch(err) {
-      setErr(err.message || "Credenciales incorrectas");
+    const result = await login(email, pass);
+    if (!result.success) {
+      setErr(result.error || "Credenciales incorrectas");
       setLoading(false);
     }
   };

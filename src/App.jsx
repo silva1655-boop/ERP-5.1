@@ -76,7 +76,7 @@ function AppContent({ user, data, setData, saveData }) {
 
 function ProtectedApp() {
   const { loading, isAuthenticated, user } = useAuth();
-  const legacyState = useLegacyData();
+  const legacyState = useLegacyData(isAuthenticated);
 
   if (loading) {
     return (
