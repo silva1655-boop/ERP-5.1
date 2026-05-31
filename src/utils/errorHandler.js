@@ -7,6 +7,7 @@ const FIREBASE_MESSAGES = {
   'auth/network-request-failed': 'No se pudo conectar con Firebase. Revisa tu conexión.',
   'auth/invalid-email': 'El correo ingresado no es válido.',
   'auth/unauthorized-domain': 'El dominio del despliegue no está autorizado en Firebase Authentication.',
+  'auth/read-timeout': 'Firebase tardó demasiado en responder. Revisa conexión, variables VITE_FIREBASE_* y reglas Firestore.',
   'permission-denied': 'No se pudo leer tu perfil en Firestore. Publica las reglas actualizadas y verifica que exista companies/{companyId}/users/{uid}.',
   'profile-not-found': 'Autenticación correcta, pero no existe un perfil Firestore para este UID.',
   'invalid-argument': 'La configuración del perfil está incompleta. Verifica el campo companyId del usuario en Firestore.',
