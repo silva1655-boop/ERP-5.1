@@ -16,7 +16,8 @@ service cloud.firestore {
 
     function userCompanyMatches(companyId) {
       return userDoc(companyId).data.companyId == companyId
-        || userDoc(companyId).data.companyid == companyId;
+        || userDoc(companyId).data.companyid == companyId
+        || userDoc(companyId).data.uid == request.auth.uid;
     }
 
     function requestCompanyMatches(companyId) {
@@ -27,7 +28,8 @@ service cloud.firestore {
     function belongsToCompany(companyId) {
       return hasUserDoc(companyId)
         && userCompanyMatches(companyId)
-        && userDoc(companyId).data.active == true;
+        && userDoc(companyId).data.active != false
+        && userDoc(companyId).data.active != 'false';
     }
 
     function role(companyId) {
@@ -63,20 +65,47 @@ service cloud.firestore {
     }
 
     function canCreateRequests(companyId) {
-      return hasRole(companyId, ['superadmin', 'admin_empresa', 'operaciones']);
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'operaciones', 'operador']);
+    }
+
+    function canReviewRequests(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones']);
+    }
+
+    function canImportMaintenance(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa']);
     }
 
     function canCreateChecklists(companyId) {
       return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones', 'mecanico', 'operador']);
     }
 
+    function canReadOperationalInspections(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones']);
+    }
+
+    function canReadNotifications(companyId) {
+      return hasRole(companyId, ['superadmin', 'admin_empresa', 'supervisor', 'operaciones']);
+    }
+
+    function isAssignedMechanicOrder(companyId) {
+      return hasRole(companyId, ['mecanico'])
+        && (resource.data.assignedToId == request.auth.uid
+          || resource.data.assignedTo == request.auth.uid
+          || (request.auth.token.email is string && resource.data.assignedToEmail == request.auth.token.email));
+    }
+
+    function mechanicWorkOrderAllowedKeys() {
+      return ['status', 'startedAt', 'startedBy', 'startedByName', 'pauseReason', 'pauseComment', 'pausedAt', 'pausedBy', 'pausedByName', 'resumedAt', 'resumedBy', 'resumedByName', 'mechanicDiagnosis', 'workPerformed', 'laborHours', 'usedParts', 'partsUsed', 'finalEquipmentStatus', 'mechanicFinalComments', 'futureRecommendation', 'evidenceUrls', 'finishedAt', 'finishedBy', 'finishedByName', 'updatedAt'];
+    }
+
     function canWriteCounter(companyId) {
       return belongsToCompany(companyId)
         && (
           isCompanyAdmin(companyId)
-          || (request.resource.data.prefix == 'SOL' && role(companyId) == 'operaciones')
+          || (request.resource.data.prefix == 'SOL' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
           || (request.resource.data.prefix == 'CHK' && role(companyId) in ['operaciones', 'mecanico', 'operador', 'supervisor'])
-          || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) == 'supervisor')
+          || (request.resource.data.prefix in ['OT', 'PM'] && role(companyId) in ['supervisor', 'operaciones'])
         );
     }
 
@@ -86,8 +115,8 @@ service cloud.firestore {
 
       match /users/{userId} {
         allow read: if signedIn()
-          && resource.data.uid == request.auth.uid;
-        allow read: if canReadCompany(companyId) && isCompanyAdmin(companyId);
+          && (userId == request.auth.uid || resource.data.uid == request.auth.uid);
+        allow read: if canReadCompany(companyId) && (isCompanyAdmin(companyId) || canManageWorkOrders(companyId));
         allow create, update, delete: if isCompanyAdmin(companyId)
           && requestCompanyMatches(companyId)
           && request.resource.data.uid == userId;
@@ -95,39 +124,108 @@ service cloud.firestore {
 
       match /equipment/{equipmentId} {
         allow read: if canReadCompany(companyId);
-        allow create, update, delete: if isCompanyAdmin(companyId);
+        allow create: if isCompanyAdmin(companyId) || canImportMaintenance(companyId) || canManageWorkOrders(companyId);
+        allow update: if isCompanyAdmin(companyId) || canManageWorkOrders(companyId)
+          || (canCreateChecklists(companyId)
+              && request.resource.data.diff(resource.data).changedKeys().hasOnly(['hourmeter', 'horometroActual', 'lastHourmeterUpdateAt', 'lastHourmeterSource', 'lastChecklistId', 'lastChecklistFolio', 'lastChecklistAt', 'lastInspectionAt', 'status', 'updatedAt'])
+              && request.resource.data.lastHourmeterSource == 'checklist')
+          || (hasRole(companyId, ['mecanico'])
+              && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'lastStatusUpdateAt', 'lastStatusSource', 'lastWorkOrderId', 'updatedAt'])
+              && request.resource.data.lastStatusSource == 'work_order_finished');
+        allow delete: if isCompanyAdmin(companyId);
       }
 
       match /workOrders/{workOrderId} {
         allow read: if canReadCompany(companyId);
-        allow create: if canManageWorkOrders(companyId);
+        allow create: if canManageWorkOrders(companyId) || hasRole(companyId, ['operaciones']);
         allow delete: if isCompanyAdmin(companyId);
         allow update: if canManageWorkOrders(companyId)
-          || (hasRole(companyId, ['mecanico'])
-              && resource.data.assignedTo == request.auth.uid
-              && request.resource.data.assignedTo == resource.data.assignedTo);
+          || (isAssignedMechanicOrder(companyId)
+              && request.resource.data.diff(resource.data).changedKeys().hasOnly(mechanicWorkOrderAllowedKeys())
+              && request.resource.data.status in ['en_curso', 'pausada', 'finalizada_mecanico']
+              && request.resource.data.assignedToId == resource.data.assignedToId
+              && request.resource.data.equipmentId == resource.data.equipmentId);
       }
 
       match /requests/{requestId} {
         allow read: if canReadCompany(companyId);
-        allow create: if canCreateRequests(companyId)
-          && request.resource.data.status == 'pendiente'
-          && request.resource.data.requestedById == request.auth.uid;
-        allow update: if canManageRequests(companyId) || canApproveRequests(companyId);
+        allow create: if (
+            canCreateRequests(companyId)
+            && request.resource.data.status == 'pendiente'
+            && request.resource.data.requestedById == request.auth.uid
+          ) || (
+            canCreateChecklists(companyId)
+            && request.resource.data.status == 'pendiente_operaciones'
+            && request.resource.data.source == 'checklist'
+            && request.resource.data.requestedById == request.auth.uid
+          ) || (
+            canReviewRequests(companyId)
+            && request.resource.data.status == 'pendiente_revision_mantenimiento'
+            && request.resource.data.source == 'finding'
+            && request.resource.data.sourceFindingId is string
+          );
+        allow update: if canManageRequests(companyId) || canApproveRequests(companyId) || canReviewRequests(companyId);
         allow delete: if isCompanyAdmin(companyId);
       }
 
       match /checklists/{checklistId} {
-        allow read: if canReadCompany(companyId);
+        allow read: if canReadOperationalInspections(companyId)
+          || (hasRole(companyId, ['operador']) && resource.data.operatorId == request.auth.uid)
+          || (hasRole(companyId, ['mecanico']) && resource.data.workOrderId is string);
         allow create: if canCreateChecklists(companyId)
           && request.resource.data.operatorId == request.auth.uid;
-        allow update: if isCompanyAdmin(companyId);
+        allow update: if isCompanyAdmin(companyId) || hasRole(companyId, ['supervisor']);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /findings/{findingId} {
+        allow read: if canReadOperationalInspections(companyId)
+          || (hasRole(companyId, ['operador']) && resource.data.operatorId == request.auth.uid)
+          || (hasRole(companyId, ['mecanico']) && resource.data.workOrderId is string);
+        allow create: if canCreateChecklists(companyId)
+          && request.resource.data.operatorId == request.auth.uid
+          && request.resource.data.status == 'pendiente_revision_operaciones'
+          && (
+            request.resource.data.source == 'manual_operator_report'
+            || (request.resource.data.source == 'checklist' && request.resource.data.sourceChecklistId is string)
+          );
+        allow update: if canReviewRequests(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if canReadNotifications(companyId)
+          || (hasRole(companyId, ['mecanico']) && resource.data.targetUserId == request.auth.uid);
+        allow create: if belongsToCompany(companyId)
+          && (
+            (request.resource.data.type == 'checklist_finding'
+              && request.resource.data.checklistId is string
+              && request.resource.data.operatorId == request.auth.uid)
+            || (request.resource.data.type in ['work_order_assignment', 'work_order_started', 'work_order_paused', 'work_order_finished', 'work_order_reopened']
+              && request.resource.data.workOrderId is string
+              && (canManageWorkOrders(companyId) || hasRole(companyId, ['mecanico'])))
+          );
+        allow update: if canReadNotifications(companyId)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'readAt', 'readBy', 'updatedAt']);
         allow delete: if isCompanyAdmin(companyId);
       }
 
       match /maintenancePlans/{planId} {
         allow read: if canReadCompany(companyId);
-        allow create, update, delete: if isCompanyAdmin(companyId);
+        allow create, update: if isCompanyAdmin(companyId) || canImportMaintenance(companyId) || canCreateChecklists(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /maintenanceHistory/{historyId} {
+        allow read: if canReadCompany(companyId);
+        allow create, update: if canImportMaintenance(companyId) || canManageWorkOrders(companyId);
+        allow delete: if isCompanyAdmin(companyId);
+      }
+
+      match /imports/{importId} {
+        allow read: if isCompanyAdmin(companyId);
+        allow create: if canImportMaintenance(companyId);
+        allow update, delete: if isCompanyAdmin(companyId);
       }
 
       match /spareParts/{partId} {
@@ -152,6 +250,16 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+
+    // Puente de compatibilidad para la base legacy del ERP original.
+    // Mantiene lectura/escritura de documentos tipo mantek_v2/{coleccion} con { data: [] }
+    // mientras se migra gradualmente a companies/{companyId}/{collection}/{docId}.
+    match /mantek_v2/{legacyDocId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
 
     match /{document=**} {
       allow read, write: if false;
